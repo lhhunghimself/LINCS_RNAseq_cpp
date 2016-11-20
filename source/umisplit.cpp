@@ -1,0 +1,236 @@
+#include <zlib.h>  
+#include <stdio.h>
+#include <iostream>
+#include <string.h>  
+#include <omp.h>
+#include "kseq.h"
+#include "umitools.hpp"
+#include <boost/filesystem.hpp>
+namespace fs = boost::filesystem;
+
+extern "C" {
+ #include "optparse.h"  
+}
+bool Ncheck(const char *seq, const int size);
+
+#define R1_LENGTH 16 //default UMI length
+
+KSEQ_INIT(gzFile, gzread);  
+string errmsg="umisplit h?vft:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
+  
+int main(int argc, char *argv[]){
+
+ char verbose=0,barcode=0;  
+ int l1,l2,emptySeqs=0,nameMismatch=0,minQual=10,UMILength=R1_LENGTH,nArgs=0;
+ unsigned int barcodeSize=0;
+ int adjustedQ=minQual+33;
+ char *arg=0,*outputFileName=0;
+ string barcodeFileName;
+ struct optparse options;
+ int opt;
+ int mismatchTol=0,NTol=0;
+ optparse_init(&options, argv);
+ int nThreads=1;
+ int filter=0;
+ string outputDir="";
+ vector<string> inputFiles;
+ 
+ //parse flags
+ while ((opt = optparse(&options, "h?vft:m:N:o:b:l:q:")) != -1) {
+  switch (opt){
+			case 'v':
+			 verbose=1;
+			break;
+			case 'f':
+    filter=1;
+   break;     
+			case 'o':
+			 outputDir=string(options.optarg);
+			break;
+   case 'm':
+    mismatchTol=atoi(options.optarg);
+   break;
+   case 't':
+    nThreads=atoi(options.optarg);
+   break;         
+   case 'N':
+    NTol=atoi(options.optarg);
+   break;
+   case 'b':
+    barcodeFileName=options.optarg;
+   break;
+   case 'l':
+    UMILength=atoi(options.optarg);//not the well barcode
+   break;
+   case 'q':
+    minQual=atoi(options.optarg);
+    adjustedQ=33+minQual;
+   break;      
+   case '?':
+    fprintf(stderr, "%s parameters are: %s\n", argv[0], errmsg.c_str());
+    exit(0);
+   break;
+   case 'h':
+    fprintf(stderr, "%s parameters are: %s\n", argv[0], errmsg.c_str());
+    exit(0);
+   break; 
+  }
+ }
+	if(outputDir=="" || barcodeFileName==""){
+		fprintf(stderr,"must give an output directory and barcodeFilename\n");
+		exit(EXIT_FAILURE);
+	}	
+ //parse file arguments
+ //these will be R1 followed by R2 arguments
+ while ((arg = optparse_arg(&options))){
+	 inputFiles.push_back(string(arg));
+	}
+	if(verbose){
+		//print out the parameters
+		fprintf(stderr,"Verbose mode on\n");
+		fprintf(stderr,"UMI Length %d\n",UMILength);
+		fprintf(stderr,"Barcode fileName %s\n",barcodeFileName.c_str());
+		fprintf(stderr,"Output directory is %s\n",outputDir.c_str());
+		fprintf(stderr,"Minimum quality %d\n",minQual);		
+		fprintf(stderr,"Number of threads %d\n",nThreads);		
+		fprintf(stderr,"Maximum number of mismatches in barcode %d\n",mismatchTol);		
+		fprintf(stderr,"Maximum number of unknown bases in barcode %d\n",NTol);
+		if(filter)fprintf(stderr,"filtering out unmatched barcodes \n");
+	 else (stderr,"saving unmatched barcodes to 'X' directory \n");
+		int i=0;
+		while (i<inputFiles.size()){
+		 fprintf(stderr,"R1 file %s\n",inputFiles[i++].c_str());
+		 if(i == inputFiles.size()){
+				fprintf(stderr,"missing corresponding R2 file\n");
+				exit(EXIT_FAILURE);
+			}
+		fprintf(stderr,"R2 file %s\n",inputFiles[i++].c_str());		
+		}		
+	}
+ fs::create_directory(fs::system_complete(outputDir));
+  //change this if using 384 wells
+ #if NWELLS > 256
+ umipanel<uint32_t,uint16_t> **barcodePanel=new umipanel<uint32_t,uint16_tr>*[nThreads];
+ for(int i=0;i<nThreads;i++)
+	 barcodePanel[i]=new umipanel<uint32_t,uint16_t> (barcodeFileName,mismatchTol,NTol);
+	#else
+	 umipanel<uint32_t,unsigned char> **barcodePanel=new umipanel<uint32_t,unsigned char>*[nThreads];
+ for(int i=0;i<nThreads;i++)
+	 barcodePanel[i]=new umipanel<uint32_t,unsigned char> (barcodeFileName,mismatchTol,NTol);
+	#endif
+	
+	//create directories for each well
+	for(int i=0;i<NWELLS;i++){
+		auto p=fs::path(outputDir+"/"+barcodePanel[0]->wells[i]);
+		fs::create_directory(fs::system_complete(p));
+	}	
+	//create bad directory	
+	if(!filter){
+	 auto p=fs::path(outputDir+"/X");
+	 fs::create_directory(fs::system_complete(p));
+	}
+
+#pragma omp parallel for num_threads (nThreads) schedule (dynamic)
+	for (int i=0;i<inputFiles.size();i+=2){
+		const int tid=omp_get_thread_num();
+		const int wellSequenceSize=barcodePanel[tid]->barcodeSize;
+		gzFile fp1=0, fp2=0;  
+  kseq_t *seq1,*seq2;
+  int l1,l2;
+		fp1 = gzopen(inputFiles[i].c_str(), "r");
+		if(fp1 == Z_NULL){
+			fprintf(stderr,"unable to open %s\n",inputFiles[i].c_str());
+			exit(EXIT_FAILURE);
+		}
+		fp2 = gzopen(inputFiles[i+1].c_str(), "r");	
+		if(fp2 == Z_NULL){
+			fprintf(stderr,"unable to open %s\n",inputFiles[i+1].c_str());
+			exit(EXIT_FAILURE);
+		}
+  seq1 = kseq_init(fp1);
+  seq2 = kseq_init(fp2);
+  
+  fs::path R1(inputFiles[i]);
+  fs::path R2(inputFiles[i+1]);
+  string R1stem;
+  if (R1.extension().string() == "gz" && (R1.stem().extension().string() == "fastq" || (R1.stem().extension().string() == ".fq")))   
+   R1stem=R1.stem().stem().string();
+  else 
+   R1stem=R1.stem().string();
+  FILE *ofp,*ofps[NWELLS+1];	
+  for(int j=0;j<NWELLS+1;j++){
+			ofps[j]=0;
+			string file;
+			if(!filter && !j){
+				file=outputDir+"/X"+"/"+R1stem+"R2_"+"X"+".fq";
+	   ofps[0]=fopen(file.c_str(),"w");			
+	   if(!ofps[j]){
+				 fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
+			 }	
+			}	
+			else if(j){
+    file =outputDir+"/"+barcodePanel[tid]->wells[j-1]+"/"+R1stem+"R2_"+barcodePanel[tid]->wells[j-1]+".fq";
+    ofps[j]=fopen(file.c_str(),"w");
+			 if(!ofps[j]){
+				 fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
+			 }				
+			}
+		}
+
+	 
+  while ((l1 = kseq_read(seq1)) >= 0 && (l2 = kseq_read(seq2)) >=0) {
+	  //check for errors 
+		 if(l1==0 || l2 == 0 || strcmp(seq1->name.s,seq2->name.s)){
+		 	if(l1==0 || l2 == 0) emptySeqs++;
+		 	if(strcmp(seq1->name.s,seq2->name.s)){
+		 		nameMismatch++;
+		 		if(verbose)fprintf(stderr,"Warning - mismatch of names in R1 and R2\n");
+		 	}	
+		 	continue;
+		 }
+		 //adjust quality and find the well
+
+			char *cptr=seq1->seq.s;
+		 char *qptr=seq1->qual.s;
+		 int k=0; 
+			while(*cptr && k < UMILength){
+		  if(*qptr<adjustedQ)*cptr='N';
+		  cptr++;qptr++;k++;
+		 }
+		 //check if there is a N
+		 if(filter && Ncheck((seq1->seq.s)+wellSequenceSize,UMILength-wellSequenceSize)) continue;
+		 const unsigned int barcodeIndex=barcodePanel[tid]->bestMatch(seq1->seq.s);
+		 if(filter && !barcodeIndex)continue;
+		 ofp=ofps[barcodeIndex];
+			fputc('@',ofp);
+		 fputs(seq2->name.s,ofp);
+		 fputc(':',ofp);				
+		 fwrite(seq1->seq.s,UMILength,1,ofp);
+			fputc('\n',ofp);	
+			fputs(seq2->seq.s,ofp);
+		 fputs("\n+\n",ofp);		 
+   fputs(seq2->qual.s,ofp);
+   fputc('\n',ofp);
+						 
+		}
+		if(!filter)
+		 fclose(ofps[0]);		   
+		for(int j=1;j<NWELLS+1;j++)
+		 fclose(ofps[j]);
+		  
+  kseq_destroy(seq1);
+  kseq_destroy(seq2);
+  gzclose(fp1);
+  gzclose(fp2);		 	 	
+	}
+	for(int i=0;i<nThreads;i++)
+  if(barcodePanel[i])delete barcodePanel[i];
+ delete[] barcodePanel;
+ return 0;  
+}
+
+bool Ncheck(const char *seq, const int size){
+	for(int i=0;i<size;i++)
+	 if(seq[i] == 'N')return 1;
+	return 0;
+}
