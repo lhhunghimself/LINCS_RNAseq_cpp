@@ -15,8 +15,9 @@ bool Ncheck(const char *seq, const int size);
 
 #define R1_LENGTH 16 //default UMI length
 
+
 KSEQ_INIT(gzFile, gzread);  
-string errmsg="umisplit h?vft:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
+string errmsg="umisplit h?vft:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-c <the file to output the umicounts to - default is UMIcounts.bin in the output directory>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
   
 int main(int argc, char *argv[]){
 
@@ -25,7 +26,7 @@ int main(int argc, char *argv[]){
  unsigned int barcodeSize=0;
  int adjustedQ=minQual+33;
  char *arg=0,*outputFileName=0;
- string barcodeFileName;
+ string barcodeFileName,countsFile="";
  struct optparse options;
  int opt;
  int mismatchTol=0,NTol=0;
@@ -36,13 +37,16 @@ int main(int argc, char *argv[]){
  vector<string> inputFiles;
  
  //parse flags
- while ((opt = optparse(&options, "h?vft:m:N:o:b:l:q:")) != -1) {
+ while ((opt = optparse(&options, "h?vft:m:N:o:b:l:q:c:")) != -1) {
   switch (opt){
 			case 'v':
 			 verbose=1;
 			break;
 			case 'f':
     filter=1;
+   break;
+   case 'c':
+    countsFile=string(options.optarg);
    break;     
 			case 'o':
 			 outputDir=string(options.optarg);
@@ -129,6 +133,16 @@ int main(int argc, char *argv[]){
 	 auto p=fs::path(outputDir+"/X");
 	 fs::create_directory(fs::system_complete(p));
 	}
+	
+ //keep track of UMIs
+ 
+  unsigned int **umiBarcodes=new unsigned int* [nThreads];
+  umiBarcodes[0]=new unsigned int [nThreads*NUMIS]; //NUMIS is 4**10 i.e. 4 to power of the size of the UMI
+  memset(umiBarcodes[0],0,nThreads*NUMIS*sizeof(unsigned int));
+  for (int i=1;i<nThreads;i++){
+	  umiBarcodes[i]=umiBarcodes[i-1]+NUMIS;
+	 }
+
 
 #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
 	for (int i=0;i<inputFiles.size();i+=2){
@@ -201,6 +215,13 @@ int main(int argc, char *argv[]){
 		 if(filter && Ncheck((seq1->seq.s)+wellSequenceSize,UMILength-wellSequenceSize)) continue;
 		 const unsigned int barcodeIndex=barcodePanel[tid]->bestMatch(seq1->seq.s);
 		 if(filter && !barcodeIndex)continue;
+			
+			//skip if ambiguous barcode and get unique barcode index from sequence
+			string umiBarcode(seq1->seq.s+6,UMISIZE);
+			unsigned int  umiBarcodeIndex=0;
+			if(ambigCheck(umiBarcode,umiBarcodeIndex))continue;
+			umiBarcodes[tid][umiBarcodeIndex]++;
+			
 		 ofp=ofps[barcodeIndex];
 			fputc('@',ofp);
 		 fputs(seq2->name.s,ofp);
@@ -223,8 +244,30 @@ int main(int argc, char *argv[]){
   gzclose(fp1);
   gzclose(fp2);		 	 	
 	}
-	for(int i=0;i<nThreads;i++)
-  if(barcodePanel[i])delete barcodePanel[i];
+	//combine the UMI counts
+	for(int tid=1;tid<nThreads;tid++){
+		for(int j=0;j<NUMIS;j++){
+			umiBarcodes[0][j]+=umiBarcodes[tid][j];
+		}
+	}	
+	//print out the UMI counts to a binary
+	{
+		if (countsFile==""){
+	  countsFile=outputDir+"/"+"UMIcounts.bin";
+		}
+	 FILE *fp=fopen(countsFile.c_str(),"w");
+		if(!fp){
+		 fprintf(stderr,"unable to open %s\n",countsFile.c_str());
+			exit(1);
+		}
+		if(!fwrite(umiBarcodes[0],sizeof(unsigned int)*NUMIS,1,fp)){
+			fprintf(stderr,"error in writing UMI counts %s\n");
+			exit(1);
+		}			
+		fclose(fp); 
+	}
+ delete[] umiBarcodes[0];
+ delete[] umiBarcodes;
  delete[] barcodePanel;
  return 0;  
 }

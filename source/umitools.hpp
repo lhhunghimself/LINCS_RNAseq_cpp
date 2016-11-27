@@ -19,6 +19,7 @@
 #ifndef GLOB_TILDE
  #define GLOB_TILDE 0
 #endif
+#define  UMISIZE 10
 #define  NUMIS 1048576 //4**10 - for 10 base UMI
 using namespace std;
 unsigned int hashCode4(string &sequence);
@@ -409,4 +410,19 @@ unsigned int sumCountsi(unsigned int **counts,unsigned int i, unsigned int size2
 	 sum+=counts[i][j];
 	return sum;
 }
-		
+bool readCountsFile(const char *fileName, unsigned int *counts){
+	FILE *fp =fopen(fileName,"r");
+	fprintf(stderr,"opening %s\n",fileName);
+	if(!fp){
+		fprintf(stderr,"error opening %s\n",fileName);
+		return(0);
+	}
+	if(!fread(counts,sizeof(unsigned int)*NUMIS,1,fp)){
+		fprintf(stderr,"error reading %s\n",fileName);
+		fclose(fp);
+		return 0;
+	}
+	fprintf(stderr,"read %s\n",fileName);	
+	fclose(fp);
+	return(1);
+}			

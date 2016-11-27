@@ -46,26 +46,38 @@ class Counts{
 		*total_mm[NWELLS],
 		*umi_mm[NWELLS],
 		**umiBarcodes,
-		**uniqueUmiBarcodes;
+		**uniqueUmiBarcodes,
+		umiCounts[NUMIS],
+		maxUmiCounts;
 		
 		//this hash is necessary to join the unknown hashes	 
 	 unordered_set<string>unknown_set;
   unordered_set<string>unknown_set_w[NWELLS];
   unordered_set<string>unknown_set_mm;
   unordered_set<string>unknown_set_mm_w[NWELLS];
+	 Counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize, string countsFile, unsigned int _maxUmiCounts){
+			init_counts(nThreads,erccListSize,geneListSize);
+			if(_maxUmiCounts){
+			 maxUmiCounts=_maxUmiCounts;
+			 readCountsFile(countsFile.c_str(),umiCounts);
+			}
+		}	
+		Counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize){
+			init_counts(nThreads,erccListSize,geneListSize);
+		}	
 	 
-  Counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize, unsigned int nUMIs){
-  
+  void init_counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize){
+   maxUmiCounts=0;
   //set up umi 2-D arrays to keep track of barCodes
   umiBarcodes=new unsigned int* [nThreads];
   uniqueUmiBarcodes=new unsigned int* [nThreads];
-  umiBarcodes[0]=new unsigned int [nThreads*nUMIs]; //NUMIS is 4**10 i.e. the size of the UMI
-  uniqueUmiBarcodes[0]=new unsigned int [nThreads*nUMIs];
-  memset(umiBarcodes[0],0,nThreads*nUMIs*sizeof(unsigned int));
-  memset(uniqueUmiBarcodes[0],0,nThreads*nUMIs*sizeof(unsigned int));
+  umiBarcodes[0]=new unsigned int [nThreads*NUMIS]; //NUMIS is 4**10 i.e. the size of the UMI
+  uniqueUmiBarcodes[0]=new unsigned int [nThreads*NUMIS];
+  memset(umiBarcodes[0],0,nThreads*NUMIS*sizeof(unsigned int));
+  memset(uniqueUmiBarcodes[0],0,nThreads*NUMIS*sizeof(unsigned int));
   for (int i=1;i<nThreads;i++){
-	  umiBarcodes[i]=umiBarcodes[i-1]+nUMIs;
-	  uniqueUmiBarcodes[i]=uniqueUmiBarcodes[i-1]+nUMIs;
+	  umiBarcodes[i]=umiBarcodes[i-1]+NUMIS;
+	  uniqueUmiBarcodes[i]=uniqueUmiBarcodes[i-1]+NUMIS;
 	 }
 	 
   //allocate memory for total
@@ -188,7 +200,7 @@ class Counts{
 		}	
 		FILE *fp=fopen(umiBarcodesFile.c_str(),"w");
 		for(int j=0;j<NUMIS;j++){
-	  fprintf(fp,"%d\t%s\t%d\t%d\n",j,decodeId(j,10).c_str(),umiBarcodes[0][j],uniqueUmiBarcodes[0][j]);	
+	  fprintf(fp,"%d\t%s\t%d\t%d\n",j,decodeId(j,UMISIZE).c_str(),umiBarcodes[0][j],uniqueUmiBarcodes[0][j]);	
 		}
 	 fp=fopen(logFile.c_str(),"w");
 	 if(!fp)exit(EXIT_FAILURE);
@@ -420,46 +432,40 @@ class Counts{
 	  unordered_set<string>unknown_umi_seen_mm;
 	 	//find matching files in the separated wells directory - we skip X - i.e. unmappables now
  		vector<string> inputFiles;
- 		char glob_str[1024];
  	 glob_t glob_result;
 		 //string well=(wellIndex >=NWELLS) ? "X" :barcodePanel.wells[wellIndex];
 		 string well=barcodePanel.wells[wellIndex];
-			sprintf(glob_str,"%s/%s/*.sam",aligned_dir.c_str(),well.c_str());
-			glob(glob_str,GLOB_TILDE,NULL,&glob_result);
+		 string globString=aligned_dir+"/"+well+"/"+"*.sam";
+			glob(globString.c_str(),GLOB_TILDE,NULL,&glob_result);
 		 for(int j=0; j<glob_result.gl_pathc; j++){
 				inputFiles.push_back(string(glob_result.gl_pathv[j]));
 		 }
 			for(int i=0;i<inputFiles.size();i++){
 				const unsigned int tid=omp_get_thread_num();
+				string fullLine;
 				fprintf(stderr,"thread %d of %d working on %s\n",tid,nThreads,inputFiles[i].c_str());
-		  FILE *fp =fopen(inputFiles[i].c_str(),"r");
-		  if(!fp){
-					fprintf(stderr,"unable to open file %s\n", glob_result.gl_pathv[i]);
-					continue;
-				}
-				char line[1024];
-		
-				while(fgets(line,sizeof(line),fp)){
-			  if(line[0] != '@'){
-		    string fullLine=string(line);
+		  std::ifstream fstream(inputFiles[i]);
+		  if(!fstream.is_open()){		fprintf(stderr,"unable to open file %s\n", inputFiles[i].c_str());continue;}
+		  while(getline(fstream,fullLine)){
+			  if(fullLine[0] != '@'){
 						total_reads[tid]++;
 						total_reads_mm[tid]++;;
 	   
 			   //get barcode
 						vector <string> items;
 						vector <string> tempItems;
-						splitStr(line," \t",items);
+						splitStr(fullLine," \t",items);
 		 	  splitStr(items[0],":",tempItems);
 		 	  string fullBarcode=tempItems[tempItems.size()-1];
 		 	  
 		 	  //string well=tempItems[tempItems.size()-2];
 		
-			   string barcode=fullBarcode.substr(6,10); //change if barcode size changes
+			   string barcode=fullBarcode.substr(6,UMISIZE); //change if barcode size changes
 			   
 			   //skip if ambiguous barcode and get unique barcode index from sequence
 			   unsigned int barcodeIndex=0;
 			   if(ambigCheck(barcode,barcodeIndex))continue;
-	
+	     if(maxUmiCounts && umiCounts[barcodeIndex] > maxUmiCounts)continue;
 			   assigned_reads[tid]++;
 			   assigned_reads_mm[tid]++;
 			   string aligned_id=items[2];
@@ -566,7 +572,7 @@ class Counts{
 						}		 
 				 }
 				}
-			 fclose(fp);
+			 fstream.close();
 			}
 		}
 	}
@@ -583,35 +589,30 @@ class Counts{
 	  unordered_set<string>unknown_umi_seen_mm;
 		
 	 	//find matching files in the separated wells directory
- 		vector<string> inputFiles;
- 		char glob_str[1024];
+  	vector<string> inputFiles;
  	 glob_t glob_result;
- 	 string well=barcodePanel.wells[wellIndex];
-			sprintf(glob_str,"%s/%s/*.sam",aligned_dir.c_str(),well.c_str());
-			glob(glob_str,GLOB_TILDE,NULL,&glob_result);
+		 //string well=(wellIndex >=NWELLS) ? "X" :barcodePanel.wells[wellIndex];
+		 string well=barcodePanel.wells[wellIndex];
+		 string globString=aligned_dir+"/"+well+"/"+"*.sam";
+			glob(globString.c_str(),GLOB_TILDE,NULL,&glob_result);
 		 for(int j=0; j<glob_result.gl_pathc; j++){
 				inputFiles.push_back(string(glob_result.gl_pathv[j]));
 		 }
 			for(int i=0;i<inputFiles.size();i++){
 				const unsigned int tid=omp_get_thread_num();
-				fprintf(stderr,"thread %d of %d working on %s file\n",tid,nThreads,inputFiles[i].c_str());
-		  FILE *fp =fopen(inputFiles[i].c_str(),"r");
-		  if(!fp){
-					fprintf(stderr,"unable to open file %s\n", glob_result.gl_pathv[i]);
-					continue;
-				}
-				char line[1024];
+				string fullLine;
 				bool goodFlag=1;
 		  string barcode="";
 		  unsigned int barcodeIndex=0;
-		  MapPosition best_hit_list;
-				while(fgets(line,sizeof(line),fp)){
-					string fullLine=string(line);
-			  if(line[0] == '@') continue;			  
+		  MapPosition best_hit_list;				
+				fprintf(stderr,"thread %d of %d working on %s\n",tid,nThreads,inputFiles[i].c_str());
+		  std::ifstream fstream(inputFiles[i]);
+		  if(!fstream.is_open()){		fprintf(stderr,"unable to open file %s\n", inputFiles[i].c_str());continue;}
+		  while(getline(fstream,fullLine)){
+			  if(fullLine[0] == '@') continue;				  
 			  //check the second field 
 			  vector <string> items;
-			  splitStr(line," \t",items); 
-		   
+			  splitStr(fullLine," \t",items); 
 		   //if this is a line that is not 256 we have a new record 
 		   if(items[1] == "256"){
 						if (!goodFlag) continue;
@@ -720,6 +721,7 @@ class Counts{
 					 }
 					} 
 				}
+				fstream.close();
 			}
 		}
 	}
@@ -739,10 +741,10 @@ class Counts{
 		vector <string> tempItems;
 		splitStr(items[0],":",tempItems);
 		string fullBarcode=tempItems[tempItems.size()-1];
-  barcode=fullBarcode.substr(6,10); //change if barcode size changes
+  barcode=fullBarcode.substr(6,UMISIZE); //change if barcode size changes
 		barcodeIndex=0;
-		int errcode=ambigCheck(barcode,barcodeIndex);
 	 if(ambigCheck(barcode,barcodeIndex)) return 0;
+	 if(maxUmiCounts && umiCounts[barcodeIndex] > maxUmiCounts)return 0;
 	 return 1;
 	} 
 	
@@ -781,15 +783,16 @@ class Counts{
 using namespace std;   
 int main(int argc, char *argv[]){
 	uint32_t posMask=0;
+	unsigned int maxUmiCounts=0;
 	int unipos=-1;
-	string sample_id="",sym2ref="", ercc_fasta="", barcodes="", aligned_dir="", dge_dir="";
+	string sample_id="",sym2ref="", ercc_fasta="", barcodes="", aligned_dir="", dge_dir="",countsFile="";
 	int opt,verbose=0,nThreads=1;
 	bool star_sam=0;
 	struct optparse options;
  optparse_init(&options, argv);	
  
- string errmsg="umimerge_parallel vh?i:p:e:a:s:b:o:t:\n-h -?  (display this message)\n-v (Verbose mode)\n-i <sample_id>\n-s <sym2ref file>\n-e <ercc_fasta file>\n-b <barcode_file>\n-a <aligns directory>\n-o <dge_dir(counts directory)>\n-t <number of threads (1)>\n-p <bin size for UMI position based filtering i.e 0 bits means reads with identical UMIs are discarded if they have same mapping position; 1 bit means reads with identical UMIs are discarded if their mapping position falls into same 2 basepair bin; 2 bit mean 4 basepair bins etc... \n\nRequired params are -i sample_id -s sym2ref -e ercc_fasta -b barcodes -a aligned_dir -o dge_dir\n\nExample:\n\numimerge_parallel -i RNAseq_20150409 -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -a Aligns -o Counts -t 4 -p 1\n";
- while ((opt = optparse(&options, "vSi:p:e:a:s:b:o:t:")) != -1) {
+ string errmsg="umimerge_parallel vh?i:p:e:a:s:b:o:t:\n-h -?  (display this message)\n-v (Verbose mode)\n-i <sample_id>\n-s <sym2ref file>\n-e <ercc_fasta file>\n-b <barcode_file>\n-a <aligns directory>\n-o <dge_dir(counts directory)>\n-m <maximum count of UMIs - over-represented UMIs which have greater than this value are skipped>\n-c <binary file with umicounts - default is UMIcounts.bin in the input SAM directory>\n-t <number of threads (1)>\n-p <bin size for UMI position based filtering i.e 0 bits means reads with identical UMIs are discarded if they have same mapping position; 1 bit means reads with identical UMIs are discarded if their mapping position falls into same 2 basepair bin; 2 bit mean 4 basepair bins etc... \n\nRequired params are -i sample_id -s sym2ref -e ercc_fasta -b barcodes -a aligned_dir -o dge_dir\n\nExample:\n\numimerge_parallel -i RNAseq_20150409 -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -a Aligns -o Counts -t 4 -p 0\n";
+ while ((opt = optparse(&options, "vSi:p:e:a:s:b:o:t:m:c:")) != -1) {
   switch (opt){
 			case 'v':
 			 verbose=1;
@@ -811,12 +814,21 @@ int main(int argc, char *argv[]){
    break;
    case 'e':
     ercc_fasta=string(options.optarg);
+   break;
+   case 'm':
+    maxUmiCounts=atoi(options.optarg);
    break; 
+   case 'c':
+    countsFile=string(options.optarg);
+   break;  
    case 'b':
     barcodes=string(options.optarg);
    break;
    case 'a':
     aligned_dir=string(options.optarg);
+    if(countsFile ==""){
+					countsFile=aligned_dir+"/"+"UMIcounts.bin";
+				}	
    break;
    case 'p':		 
     unipos=atoi(options.optarg);
@@ -865,8 +877,8 @@ int main(int argc, char *argv[]){
 	umipanel<uint32_t,unsigned char> barcodePanel(barcodes.c_str(),mismatchTol,NTol);  		
 	#endif
 	
-	Counts count(nThreads,erccList.size(),geneList.size(),NUMIS);
-
+	Counts count(nThreads,erccList.size(),geneList.size(),countsFile,maxUmiCounts);
+ 
  if(star_sam)count.merge_parallel_star(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index,  posMask,unipos);
 	
 	else count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,unipos);
