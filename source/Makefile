@@ -27,6 +27,10 @@ else
 endif
 LIBS= -lboost_filesystem -lboost_system -lgomp -lm -lc -lgcc -lrt -lz
 MKDIR_P = mkdir -p
+#ifdef ALPINE
+ ALPINE_FLAG= -fPIC -static
+#endif
+OCFLAGS = -std=c99 -Wall -Wextra -g3 ${ALPINE_FLAG}
 
 
 .PHONY: clean all all96 all384
@@ -36,14 +40,14 @@ all: umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umi
 all96: clean directories96 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter
 all384: clean directories384 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter
 
-OBJ_umifilter = umifilter.o optparse/optparse.o 
-OBJ_umisplit = umisplit.o optparse/optparse.o 
-OBJ_umisplit_sam = umisplit_sam.o optparse/optparse.o 
-OBJ_umimerge = umimerge.o optparse/optparse.o 
-OBJ_umimerge_single_pass = umimerge_single_pass.o 
-OBJ_umisplit_orig = umisplit_orig.o optparse/optparse.o 
-OBJ_umisample = umisample.o optparse/optparse.o 
-OBJ_umimerge_parallel = umimerge_parallel.o optparse/optparse.o 
+OBJ_umifilter = umifilter.o optparse.o 
+OBJ_umisplit = umisplit.o optparse.o 
+OBJ_umisplit_sam = umisplit_sam.o optparse.o 
+OBJ_umimerge = umimerge.o optparse.o 
+OBJ_umimerge_single_pass = umimerge_single_pass.o optparse.o  
+OBJ_umisplit_orig = umisplit_orig.o optparse.o 
+OBJ_umisample = umisample.o optparse.o 
+OBJ_umimerge_parallel = umimerge_parallel.o optparse.o 
 
 directories96: 
 	$(eval DIR+=w96/) 
@@ -89,12 +93,8 @@ umisample : $(OBJ_umisample)
 	$(LD) -o ${DIR}umisample $(LFLAGS) $(OBJ_umisample) $(LIBS)
 umisample.o : umisample.cpp 
 	$(CPP) $(CFLAGS) -c umisample.cpp
-#ifdef ALPINE
-optparse.o :
-	cd optparse && make clean && make ALPINE=1
-#else
-optparse.o :
-	cd optparse && make clean && make
+optparse.o : optparse/optparse.c
+	$(CC) $(OCFLAGS) -c optparse/optparse.c
 #endif
 clean:
 	-@rm  umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam

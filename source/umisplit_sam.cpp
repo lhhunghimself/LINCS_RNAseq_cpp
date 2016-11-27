@@ -13,7 +13,6 @@ extern "C" {
 }
   
 int main(int argc, char *argv[]){
-
  char verbose=0;  
  unsigned int barcodeSize=0;
  char *arg=0,*outputFileName=0;
@@ -29,7 +28,7 @@ int main(int argc, char *argv[]){
 string errmsg="umisplit_sam h?vfi:t:m:N:o:b:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-i <input directory - instead of or in conjunction of entering sam files - an input directory can be provided with the sam files>):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory (output)>\n<samfile1>..<samfileN>\n\nRequired parameters: barcodefile, input directory and/or individual sam files\n\nExample:\numisplit_sam -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -i Aligns -o well_sorted_Aligns\n";
  
  //parse flags
- while ((opt = optparse(&options, "vfi:t:m:N:o:b:")) != -1) {
+ while ((opt = optparse(&options, "vfi:t:m:N:o:b:")) != -1){
   switch (opt){
 			case 'v':
 			 verbose=1;
@@ -122,10 +121,9 @@ string errmsg="umisplit_sam h?vfi:t:m:N:o:b:\n-h -? (display this message)\n-v (
 	//get sam files from directory if directory is given
 	if(inputDir != ""){
 		glob_t glob_result;
-  char glob_str[1024];
-  sprintf(glob_str,"%s/*.sam",inputDir.c_str());
-  if(verbose) fprintf(stderr,"using query %s to search for files\n",glob_str); 
-  glob(glob_str,GLOB_TILDE,NULL,&glob_result);
+	 string globString=inputDir+"/*.sam";
+		if(verbose) fprintf(stderr,"using query %s to search for files\n",globString.c_str()); 
+		glob(globString.c_str(),GLOB_TILDE,NULL,&glob_result); 
 	 for(unsigned int i=0; i<glob_result.gl_pathc; ++i) {
 			if(verbose) fprintf(stderr,"adding %s to list of input files\n",glob_result.gl_pathv[i]);
 		 inputFiles.push_back(string(glob_result.gl_pathv[i]));
@@ -134,11 +132,8 @@ string errmsg="umisplit_sam h?vfi:t:m:N:o:b:\n-h -? (display this message)\n-v (
 	const int wellSequenceSize=barcodePanel[0]->barcodeSize;
  #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
 	for (int i=0;i<inputFiles.size();i+=2){
-		FILE *ifp =fopen(inputFiles[i].c_str(),"r");
-		if(!ifp){
-	 	fprintf(stderr,"unable to open file %s\n", inputFiles[i].c_str());
-	 	continue;
-	 }
+	 std::ifstream fstream(inputFiles[i]);
+		if(!fstream.is_open()){		fprintf(stderr,"unable to open file %s\n", inputFiles[i].c_str());continue;}
 		const int tid=omp_get_thread_num();
 		fs::path inputPath (inputFiles[i]);
 		string inputFilestem=inputPath.stem().string();
@@ -162,19 +157,20 @@ string errmsg="umisplit_sam h?vfi:t:m:N:o:b:\n-h -? (display this message)\n-v (
 			 }				
 			}
 		}
-		char line[1024];
-		while(fgets(line,sizeof(line),ifp)){
-		 if(line[0] != '@'){
+		string fullLine;
+		while(getline(fstream,fullLine)){
+		 if(fullLine[0] != '@'){
 				vector <string> items;
 				vector <string> tempItems;
-				splitStr(line," \t",items);
+				splitStr(fullLine," \t",items);
 				splitStr(items[0],":",tempItems);
 	 	 string fullBarcode=tempItems[tempItems.size()-1];
 	 	 int wellIndex=barcodePanel[tid]->bestMatch(fullBarcode.c_str());
 	 	 if(!wellIndex && filter)continue;
-				fprintf(ofps[wellIndex],"%s\n",line);		 
+				fputs(fullLine.c_str(),ofps[wellIndex]);		 
 			}
 		}
+		fstream.close();
 		if(!filter)
 		 fclose(ofps[0]);		   
 		for(int j=1;j<NWELLS+1;j++)

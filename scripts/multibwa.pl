@@ -6,7 +6,8 @@ use threads;
 # 1.3 Reference
 our ($TOP_DIR,$REF_DIR,$SPECIES_DIR,$ALIGN_DIR,$BWA_ALN_SEED_LENGTH,$BWA_SAM_MAX_ALIGNS_FOR_XA_TAG,$nThreads)=@ARGV;
 our $REF_SEQ_FILE="$SPECIES_DIR/refMrna_ERCC_polyAstrip.hg19.fa";
-our $cat="umifilter -c /mnt/backup/DetoxS/UMITestShort/Aligns/UMIcounts.bin -m 1000 ";
+#our $cat="umifilter -c /mnt/backup/DetoxS/UMITestShort/Aligns/UMIcounts.bin -m 1000 ";
+our $cat="cat ";
 
 system("mkdir -p /tmp/locks.$$");
 my @threads = initThreads($nThreads);
