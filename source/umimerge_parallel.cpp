@@ -397,7 +397,7 @@ class Counts{
 	 for(int i=0;i<NWELLS;i++){
 			fprintf(fp,"\t%d",sumCountsi(total_mm,i,geneList.size()));
 		}
-		fprintf(fp,"%d\n",sumCountsi(total_mm,NWELLS-1,geneList.size()));
+		fprintf(fp,"\n");
 		
 	 fprintf(fp,"Refseq_UMI"); 
 	 for(int i=0;i<NWELLS;i++){
@@ -883,7 +883,6 @@ int main(int argc, char *argv[]){
 	
 	else count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,unipos);
 		
-		 
 	count.print(dge_dir,sample_id,nThreads,erccList,geneList,wellList);
  return 1;		
 	 

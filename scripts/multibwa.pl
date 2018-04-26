@@ -15,7 +15,7 @@ print "Using threads @threads\n";
 our @cmds,
 our @done;
 
-my @dirs=split(' ',`find $ALIGN_DIR -maxdepth 1 -type d`);
+my @dirs=split(' ',`find $ALIGN_DIR -mindepth 1 -maxdepth 1 -type d`);
 foreach my $dir (@dirs){
  #system("rm $ALIGN_DIR/$dir/*.sam");
 	push(@cmds,"$dir");	
@@ -27,7 +27,8 @@ foreach(@threads){
 foreach(@threads){
  $_->join();
 }
-system("rm -rf /tmp/locks*");
+#rm commands are not necessarily atomic with EBS !?
+#system("rm -rf /tmp/locks*");
 				
 
 sub doOperation{
@@ -41,7 +42,7 @@ sub doOperation{
 	  system("$cat $dir/*.fq >  $dir/all.fastq");
 	  my $cmd="(bwa aln -l $BWA_ALN_SEED_LENGTH -t 1 $REF_SEQ_FILE $dir/all.fastq | bwa samse -n $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $REF_SEQ_FILE - $dir/all.fastq | grep -v '^\@' > $dir/all.sam) &> /dev/null";
 	  system("$cmd");
-	  system("rm $dir/all.fastq\n");
+	  #system("rm $dir/all.fastq\n");
 	  mkdir($donefile);
 		}
 		else{

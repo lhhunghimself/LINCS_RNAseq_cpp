@@ -7,7 +7,8 @@
 
 # 1.1 Global
 
-TOP_DIR="/mnt/backup/DetoxS/UMITest"
+
+TOP_DIR=$1
 
 # 1.2 Dataset
 SERIES="20150409"
@@ -17,7 +18,7 @@ DATA_DIR=$TOP_DIR
 SEQ_DIR="${DATA_DIR}/Seqs"
 ALIGN_DIR="${DATA_DIR}/Aligns"
 COUNT_DIR="${DATA_DIR}/Counts"
-UMITOOLS_DIR="/mnt/backup/DetoxS/LINCS_RNAseq_cpp/" #where the cpp binaries are
+UMITOOLS_DIR="${TOP_DIR}/LINCS_RNAseq_cpp" #where the cpp repo is
 # 1.3 Reference
 REF_DIR="$TOP_DIR/References/Broad_UMI"
 SPECIES_DIR="${REF_DIR}/Human_RefSeq"
@@ -30,7 +31,7 @@ BARCODE_FILE="${REF_DIR}/barcodes_trugrade_96_set4.dat"
 PROG_DIR="$TOP_DIR/Programs/Broad-DGE"
 BWA_ALN_SEED_LENGTH=24
 BWA_SAM_MAX_ALIGNS_FOR_XA_TAG=20
-THREAD_NUMBER=4
+THREAD_NUMBER=1
 
 # 2 Computation
 
@@ -49,10 +50,12 @@ done
  #split into wells
  #use tight checking no mismatch no ambiguities to match original - default is the looser setting of mismatch =1 and missing N=1 
 
-echo "${UMITOOLS_DIR}/umisplit -v -l 16 -m 1 -N 1 -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES"
-$UMITOOLS_DIR/umisplit -v -l 16 -m 1 -N 1 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
-
+echo "${UMITOOLS_DIR}/source/umisplit -v -l 16 -m 1 -N 1 -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES"
+$UMITOOLS_DIR/source/umisplit -v -l 16 -m 0 -N 1 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
 echo "${UMITOOLS_DIR}/scripts/multibwa.pl $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER"
 $UMITOOLS_DIR/scripts/multibwa.pl $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER
-echo "${UMITOOLS_DIR}/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
-$UMITOOLS_DIR/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER
+#cleanup here because of non-atomic EBS
+rm ${ALIGN_DIR}/*/*.fastq
+rm /tmp/lock* -rf
+echo "${UMITOOLS_DIR}/source/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
+$UMITOOLS_DIR/source/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER
