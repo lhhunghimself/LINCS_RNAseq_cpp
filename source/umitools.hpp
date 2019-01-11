@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <stdexcept>
 
 //default definitions - can be overridden by passing variables to make
 
@@ -295,11 +296,13 @@ string splitStrIndex(string str,const char *delim, int index){
 	//have to make a copy of str in this case
 	vector <string> temp;
 	int n=0;
+	//handle on stack if small which it usually is
 	if(str.size()<1024){
 		char cstr[1024];
 		strcpy(cstr,str.c_str());
 		char *save;
 	 char *p=strtok_r(cstr,delim,&save);
+	 if (!p) {throw std::invalid_argument("delimiter is not found\n");}
 	 while(p){
 			if(index < 0) temp.push_back(string(p));
 			else if(n==index){
@@ -310,13 +313,15 @@ string splitStrIndex(string str,const char *delim, int index){
 	 }
 	 if(index <0 && index+temp.size() >=0){
 			return temp[index+temp.size()];
-		}	
+		}
 	}
+	//if it is big then malloc
 	else{
 		char *cstr=(char*) malloc(str.size()+1);
 		strcpy(cstr,str.c_str());
 			char *save;
 	 char *p=strtok_r(cstr,delim,&save);
+	 if (!p) {throw std::invalid_argument("delimiter is not found\n");}
 	 while(p){
 			if(index < 0) temp.push_back(string(p));
 			else if(n==index){
@@ -328,8 +333,10 @@ string splitStrIndex(string str,const char *delim, int index){
 	 free(cstr);	
 	 if(index <0 && index+temp.size() >=0){
 			return temp[index+temp.size()];
-		}	
-	}	 	
+		}
+	}
+	//if it falls through that means either the index is too big
+	throw std::invalid_argument( "index is out of range\n");
 }
 
 string readWells(string filename, unordered_map<string,unsigned int> &well_to_index,vector<string> &wellList){

@@ -219,7 +219,7 @@ int main(int argc, char *argv[]){
 			//skip if ambiguous barcode and get unique barcode index from sequence
 			string umiBarcode(seq1->seq.s+6,UMISIZE);
 			unsigned int  umiBarcodeIndex=0;
-			if(ambigCheck(umiBarcode,umiBarcodeIndex))continue;
+			if (filter && ambigCheck(umiBarcode,umiBarcodeIndex)) continue;
 			umiBarcodes[tid][umiBarcodeIndex]++;
 			
 		 ofp=ofps[barcodeIndex];

@@ -33,12 +33,12 @@ MKDIR_P = mkdir -p
 OCFLAGS = -std=c99 -Wall -Wextra -g3 ${ALPINE_FLAG}
 
 
-.PHONY: clean all all96 all384
+.PHONY: clean all all96 all384 
 
 default: all
-all: umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter 
-all96: clean directories96 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter
-all384: clean directories384 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter
+all: umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter cleanDeps
+all96: clean directories96 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter 
+all384: clean directories384 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter 
 
 OBJ_umifilter = umifilter.o optparse.o 
 OBJ_umisplit = umisplit.o optparse.o 
@@ -96,8 +96,12 @@ umisample.o : umisample.cpp
 optparse.o : optparse/optparse.c
 	$(CC) $(OCFLAGS) -c optparse/optparse.c
 #endif
-clean:
-	-@rm  umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam
+clean: cleanBins cleanDeps
+
+cleanDeps:
 	-@rm -rf *.o 2>/dev/null || true
 	-@rm -rf optparse/*.o 2>/dev/null || true
 	-@rm -rf core.* 2>/dev/null || true
+
+cleanBins: 
+	-@rm  -f umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam

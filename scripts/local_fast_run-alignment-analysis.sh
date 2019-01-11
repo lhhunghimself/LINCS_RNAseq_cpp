@@ -7,7 +7,7 @@
 #set the correct environment variable - this chooses between the binaries for 96 and 384 wells
 
 NWELLS=96
-THREAD_NUMBER=4
+THREAD_NUMBER=1
 
 #DOCKER COMMANDS - comment out if you want to run with the local binaries
 DPREFIX="";
@@ -19,7 +19,7 @@ DOCKER_BWA=""
 
 # 1.1 Global
 
-TOP_DIR="${DPREFIX}/mnt/backup/DetoxS"
+TOP_DIR="${PWD}/data"
 
 # 1.2 Dataset
 SERIES="20150409"

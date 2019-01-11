@@ -40,22 +40,22 @@ THREAD_NUMBER=1
 let "IDX = 1"	
 SEQ_FILES="";
 #get files
-while [ "$IDX" -le "${LANES}" ]; do
+#while [ "$IDX" -le "${LANES}" ]; do
 	SUBSAMPLE_ID="Lane$IDX"
 	SEQ_FILE_R1="${SEQ_DIR}/${SAMPLE_ID}_${SUBSAMPLE_ID}_R1.fastq.gz"
 	SEQ_FILE_R2="${SEQ_DIR}/${SAMPLE_ID}_${SUBSAMPLE_ID}_R2.fastq.gz"
 	SEQ_FILES="${SEQ_FILES} ${SEQ_FILE_R1} ${SEQ_FILE_R2}"
 	let "IDX = $IDX + 1"
-done	
+#done	
  #split into wells
  #use tight checking no mismatch no ambiguities to match original - default is the looser setting of mismatch =1 and missing N=1 
 
 echo "${UMITOOLS_DIR}/source/umisplit -v -l 16 -m 1 -N 1 -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES"
-$UMITOOLS_DIR/source/umisplit -v -l 16 -m 0 -N 1 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
+$UMITOOLS_DIR/source/w96/umisplit -v -l 16 -m 0 -N 0 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
 echo "${UMITOOLS_DIR}/scripts/multibwa.pl $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER"
 $UMITOOLS_DIR/scripts/multibwa.pl $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER
 #cleanup here because of non-atomic EBS
 rm ${ALIGN_DIR}/*/*.fastq
 rm /tmp/lock* -rf
 echo "${UMITOOLS_DIR}/source/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
-$UMITOOLS_DIR/source/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER
+$UMITOOLS_DIR/source/w96/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER
