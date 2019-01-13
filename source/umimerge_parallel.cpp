@@ -767,6 +767,7 @@ int main(int argc, char *argv[]){
 	Counts count(nThreads,erccList.size(),geneList.size(),countsFile,maxUmiCounts);
  
  count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,binSize,nbins,geneLevelFilter);
+ 
 		
 	count.print(dge_dir,sample_id,nThreads,erccList,geneList,wellList);
  return 1;		
