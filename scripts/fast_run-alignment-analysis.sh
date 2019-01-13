@@ -31,7 +31,7 @@ BARCODE_FILE="${REF_DIR}/barcodes_trugrade_96_set4.dat"
 PROG_DIR="$TOP_DIR/Programs/Broad-DGE"
 BWA_ALN_SEED_LENGTH=24
 BWA_SAM_MAX_ALIGNS_FOR_XA_TAG=20
-THREAD_NUMBER=1
+THREAD_NUMBER=4
 
 # 2 Computation
 
@@ -40,13 +40,13 @@ THREAD_NUMBER=1
 let "IDX = 1"	
 SEQ_FILES="";
 #get files
-#while [ "$IDX" -le "${LANES}" ]; do
+while [ "$IDX" -le "${LANES}" ]; do
 	SUBSAMPLE_ID="Lane$IDX"
 	SEQ_FILE_R1="${SEQ_DIR}/${SAMPLE_ID}_${SUBSAMPLE_ID}_R1.fastq.gz"
 	SEQ_FILE_R2="${SEQ_DIR}/${SAMPLE_ID}_${SUBSAMPLE_ID}_R2.fastq.gz"
 	SEQ_FILES="${SEQ_FILES} ${SEQ_FILE_R1} ${SEQ_FILE_R2}"
 	let "IDX = $IDX + 1"
-#done	
+done	
  #split into wells
  #use tight checking no mismatch no ambiguities to match original - default is the looser setting of mismatch =1 and missing N=1 
 
@@ -57,5 +57,5 @@ $UMITOOLS_DIR/scripts/multibwa.pl $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA
 #cleanup here because of non-atomic EBS
 rm ${ALIGN_DIR}/*/*.fastq
 rm /tmp/lock* -rf
-echo "${UMITOOLS_DIR}/source/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
+echo "${UMITOOLS_DIR}/source/w96/umimerge_parallel -g -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
 $UMITOOLS_DIR/source/w96/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER

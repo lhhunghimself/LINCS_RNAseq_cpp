@@ -15,6 +15,22 @@
 //presently hardcoded for UMI size 16 and well barcode size 6
 //to generalize have to generalize the hash function as well
 
+ //barcodes are mapped as follows
+ //for each umi convert obtain barcodeIndex - 2 bit conversion
+ //00 A 01 C 10 G 11 T
+ //N is present do not count - end search
+ //ambiguity if it is to be handled is handled at the split/demux stage
+ //This
+ 
+ //each umi is associated with at least gene name or ercc spikein ID or chrM (mitochondrial) - the sum of possible categories is the nCategories
+ //The unique encoding at the gene levels is barcodeIndex*nCategories+categoryID (geneID number if in refSeq or geneID+ERCC id if ERCC or last index if chrM
+ //This umi gives gene level unique encoding
+ //To add positional information we need to know the max number of bin and the bin size - for convenience we define this using number of bits
+ //First we calculate the bin by right shifting bin size bits and filtering through a mask of maxBins bits
+ //left shift the unique encoding of the gene levels by maxBin bits and or it with the encoded bin 
+ //The results should look like CCCCCCCCCCCPPPPPPPPP   where the C's are the bits encoding the category/UMI and P are the bits encoding the position
+
+ 
 
 extern "C" {
  #include "optparse.h"  
@@ -418,10 +434,13 @@ class Counts{
 		fprintf(fp,"\n");
 	 fclose(fp);		
 	}
- 		
-	template <class T1,class T2> void merge_parallel(int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int unipos){
-		const uint64_t barcodeBase=geneList.size()+erccList.size()+1; //add1 for chrM
-	 const uint64_t wellBase=(1<<20)*barcodeBase;
+ 
+
+ 
+
+ 
+	template <class T1,class T2> void merge_parallel(int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int binSize, int nbins, bool geneLevelFilter){
+		const uint64_t nCategories=geneList.size()+erccList.size()+1; //add1 for chrM
 	 
   #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
   for	(int wellIndex=0; wellIndex<NWELLS; wellIndex++){
@@ -462,6 +481,7 @@ class Counts{
 		
 			   string barcode=fullBarcode.substr(6,UMISIZE); //change if barcode size changes
 			   
+			   //ambigCheck
 			   //skip if ambiguous barcode and get unique barcode index from sequence
 			   unsigned int barcodeIndex=0;
 			   if(ambigCheck(barcode,barcodeIndex))continue;
@@ -491,8 +511,11 @@ class Counts{
 						
 						if (aligned_id.substr(0,4) == "ERCC"){
 							const int erccIndex=ercc_to_index[aligned_id];
-							uint64_t umicode=barcodeIndex*barcodeBase+erccIndex+geneList.size();
-							if(posMask) umicode = (umicode << 17) | (pos >> unipos & posMask);
+							uint64_t umicode=barcodeIndex*nCategories+erccIndex+geneList.size();
+							if(!geneLevelFilter){
+								uint32_t positionCode=(pos >> binSize) & posMask; 
+								umicode = (umicode << nbins) | positionCode;
+							}
 							if(!best_hits_list.size()){ 
 							 spike_total[wellIndex][erccIndex]++;						
 							 if(!umi_seen.count(umicode)){
@@ -509,8 +532,11 @@ class Counts{
 							}
 						}
 						else if 	(aligned_id.substr(0,4) == "chrM"){
-							uint64_t umicode=barcodeIndex*barcodeBase+barcodeBase-1;
-							if(posMask) umicode = (umicode<< 17) | (pos >> unipos & posMask);
+							uint64_t umicode=barcodeIndex*nCategories+nCategories-1;
+							if(!geneLevelFilter){
+								uint32_t positionCode=(pos >> binSize) & posMask; 
+								umicode = (umicode << nbins) | positionCode;
+							}
 							if(!best_hits_list.size()){
 								assigned_mito_reads[tid]++;
 							 if(!umi_seen.count(umicode)){
@@ -529,8 +555,11 @@ class Counts{
 						else if (refseq_to_gene.count(aligned_id)){
 							string gene = refseq_to_gene[aligned_id];
 							const unsigned int geneIndex =gene_to_index[gene];
-							uint64_t umicode=barcodeIndex*barcodeBase+geneIndex;
-							if(posMask) umicode = (umicode << 17) | (pos >> unipos & posMask);
+							uint64_t umicode=barcodeIndex*nCategories+geneIndex;
+							if(!geneLevelFilter){
+								uint32_t positionCode=(pos >> binSize) & posMask; 
+								umicode = (umicode << nbins) | positionCode;
+							}
 							bool multiGene=multiGeneHit(best_hits_list,gene,refseq_to_gene);
 							if(!multiGene){
 								total[wellIndex][geneIndex]++;
@@ -576,155 +605,7 @@ class Counts{
 			}
 		}
 	}
-	//STAR aligner has multiple mappings on multiple lines
-	template <class T1,class T2> void merge_parallel_star(int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int unipos){
- 	const uint64_t barcodeBase=geneList.size()+erccList.size()+1; //add1 for chrM
-	 const uint64_t wellBase=(1<<20)*barcodeBase; 
-  #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
-  for	(int wellIndex=0; wellIndex<NWELLS; wellIndex++){
-		 //hashes
-		 unordered_set<uint64_t>umi_seen;
-   unordered_set<uint64_t>umi_seen_mm;
-	  unordered_set<string>unknown_umi_seen;
-	  unordered_set<string>unknown_umi_seen_mm;
-		
-	 	//find matching files in the separated wells directory
-  	vector<string> inputFiles;
- 	 glob_t glob_result;
-		 //string well=(wellIndex >=NWELLS) ? "X" :barcodePanel.wells[wellIndex];
-		 string well=barcodePanel.wells[wellIndex];
-		 string globString=aligned_dir+"/"+well+"/"+"*.sam";
-			glob(globString.c_str(),GLOB_TILDE,NULL,&glob_result);
-		 for(int j=0; j<glob_result.gl_pathc; j++){
-				inputFiles.push_back(string(glob_result.gl_pathv[j]));
-		 }
-			for(int i=0;i<inputFiles.size();i++){
-				const unsigned int tid=omp_get_thread_num();
-				string fullLine;
-				bool goodFlag=1;
-		  string barcode="";
-		  unsigned int barcodeIndex=0;
-		  MapPosition best_hit_list;				
-				fprintf(stderr,"thread %d of %d working on %s\n",tid,nThreads,inputFiles[i].c_str());
-		  std::ifstream fstream(inputFiles[i]);
-		  if(!fstream.is_open()){		fprintf(stderr,"unable to open file %s\n", inputFiles[i].c_str());continue;}
-		  while(getline(fstream,fullLine)){
-			  if(fullLine[0] == '@') continue;				  
-			  //check the second field 
-			  vector <string> items;
-			  splitStr(fullLine," \t",items); 
-		   //if this is a line that is not 256 we have a new record 
-		   if(items[1] == "256"){
-						if (!goodFlag) continue;
-		    checkPush(items,best_hit_list);
-				 }
-		   else{
-						total_reads[tid]++;
-					 total_reads_mm[tid]++;				
-						if(best_hit_list.gene.size()){
-						 if(!goodFlag)continue;
-							string aligned_id=best_hit_list.gene[0];
-							unsigned int pos=best_hit_list.position[0];
-							if (aligned_id.substr(0,4) == "ERCC"){
-								const int erccIndex=ercc_to_index[aligned_id];
-								uint64_t umicode=barcodeIndex*barcodeBase+erccIndex+geneList.size();
-								if(posMask) umicode = (umicode << 17) | (pos >> unipos & posMask);
-								if(best_hit_list.gene.size() == 1){ 
-								 spike_total[wellIndex][erccIndex]++;						
-								 if(!umi_seen.count(umicode)){
-									 umi_seen.insert(umicode);
-									 spike_umi[wellIndex][erccIndex]++;
-									 uniqueUmiBarcodes[tid][barcodeIndex]++;
-								 }
-								 umiBarcodes[tid][barcodeIndex]++;
-								} 
-								spike_total_mm[wellIndex][erccIndex]++;
-								if(!umi_seen_mm.count(umicode)){
-									umi_seen_mm.insert(umicode);
-									spike_umi_mm[wellIndex][erccIndex]++;
-								}
-							}
-							else if 	(aligned_id.substr(0,4) == "chrM"){
-								uint64_t umicode=barcodeIndex*barcodeBase+barcodeBase-1;
-								if(posMask) umicode = (umicode<< 17) | (pos >> unipos & posMask);
-								if(best_hit_list.gene.size() == 1){
-									assigned_mito_reads[tid]++;
-								 if(!umi_seen.count(umicode)){
-								 	assigned_mito_umi[tid]++;
-								 	umi_seen.insert(umicode);
-								 	uniqueUmiBarcodes[tid][barcodeIndex]++;
-								 }
-								 umiBarcodes[tid][barcodeIndex]++;						
-								} 
-								assigned_mito_reads_mm[tid]++;
-								if(!umi_seen_mm.count(umicode)){
-									assigned_mito_umi_mm[tid]++;
-									umi_seen_mm.insert(umicode);
-								}
-							}
-							else if (refseq_to_gene.count(aligned_id)){
-								string gene = refseq_to_gene[aligned_id];
-								const unsigned int geneIndex =gene_to_index[gene];
-								uint64_t umicode=barcodeIndex*barcodeBase+geneIndex;
-								if(posMask) umicode = (umicode << 17) | (pos >> unipos & posMask);
-								bool multiGene=best_hit_list.multiGeneHit(gene,refseq_to_gene);
-								if(!multiGene){
-									total[wellIndex][geneIndex]++;
-								 if(!umi_seen.count(umicode)){
-									 umi[wellIndex][geneIndex]++;
-									 umi_seen.insert(umicode);
-									 uniqueUmiBarcodes[tid][barcodeIndex]++;
-								 }	
-								 umiBarcodes[tid][barcodeIndex]++;
-								}
-								total_mm[wellIndex][geneIndex]++;
-								if(!umi_seen_mm.count(umicode)){
-									umi_mm[wellIndex][geneIndex]++;
-									umi_seen_mm.insert(umicode);
-								}					
-							}
-							else{
-								string umicode=barcodePanel.wells[wellIndex] + barcode + aligned_id;
-								if(best_hit_list.gene.size() == 1){
-									assigned_unknown_reads[tid]++;
-								 if(!unknown_set_w[wellIndex].count(aligned_id)){
-								 	unknown_set.insert(aligned_id);
-								 }
-								 if(!unknown_umi_seen.count(umicode)){
-								  assigned_unknown_umi[tid]++;	
-									 unknown_umi_seen.insert(umicode);
-									 uniqueUmiBarcodes[tid][barcodeIndex]++;	
-								 }
-								 umiBarcodes[tid][barcodeIndex]++;
-								}
-								if(!unknown_set_mm.count(aligned_id)){
-								 unknown_set_mm_w[wellIndex].insert(aligned_id);
-								}
-								assigned_unknown_reads_mm[tid]++;
-								if(!unknown_umi_seen_mm.count(umicode)){
-								 assigned_unknown_umi_mm[tid]++;
-									unknown_umi_seen_mm.insert(umicode);
-								}				
-							}	
-						}		 
-					 //check if ambiguous - if so then flag it
-     
-						goodFlag=flushList(items,barcode,barcodeIndex,best_hit_list); //write the contents of the matches and get ready to read the next field	
-						if(goodFlag){
-							assigned_reads[tid]++;
-				   assigned_reads_mm[tid]++;
-			    if (checkPush(items,best_hit_list)){
-						 	assigned_aligned_reads[tid]++;
-						  assigned_aligned_reads_mm[tid]++;
-							}
-						 else goodFlag=0;
-					 }
-					} 
-				}
-				fstream.close();
-			}
-		}
-	}
+	
 	bool checkPush(vector<string> items, MapPosition &best_hit_list){
 		//check if it has been seen
 		//>= is used to check MAX_BEST because the best hit is also in the list unlike the code for bwa where the extra hits are in the list
@@ -782,24 +663,31 @@ class Counts{
 
 using namespace std;   
 int main(int argc, char *argv[]){
-	uint32_t posMask=0;
 	unsigned int maxUmiCounts=0;
-	int unipos=-1;
+	int nbins=16;
+	int binSize=0;
+	uint32_t posMask=(1 << nbins+1) -1;
+	bool geneLevelFilter=0;
 	string sample_id="",sym2ref="", ercc_fasta="", barcodes="", aligned_dir="", dge_dir="",countsFile="";
 	int opt,verbose=0,nThreads=1;
-	bool star_sam=0;
 	struct optparse options;
  optparse_init(&options, argv);	
  
- string errmsg="umimerge_parallel vh?i:p:e:a:s:b:o:t:\n-h -?  (display this message)\n-v (Verbose mode)\n-i <sample_id>\n-s <sym2ref file>\n-e <ercc_fasta file>\n-b <barcode_file>\n-a <aligns directory>\n-o <dge_dir(counts directory)>\n-m <maximum count of UMIs - over-represented UMIs which have greater than this value are skipped>\n-c <binary file with umicounts - default is UMIcounts.bin in the input SAM directory>\n-t <number of threads (1)>\n-p <bin size for UMI position based filtering i.e 0 bits means reads with identical UMIs are discarded if they have same mapping position; 1 bit means reads with identical UMIs are discarded if their mapping position falls into same 2 basepair bin; 2 bit mean 4 basepair bins etc... \n\nRequired params are -i sample_id -s sym2ref -e ercc_fasta -b barcodes -a aligned_dir -o dge_dir\n\nExample:\n\numimerge_parallel -i RNAseq_20150409 -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -a Aligns -o Counts -t 4 -p 0\n";
- while ((opt = optparse(&options, "vSi:p:e:a:s:b:o:t:m:c:")) != -1) {
+ string errmsg="umimerge_parallel vh?i:g:n:p:e:a:s:b:o:t:\n-h -?  (display this message)\n-v (Verbose mode)\n-i <sample_id>\n-s <sym2ref file>\n-e <ercc_fasta file>\n-b <barcode_file>\n-a <aligns directory>\n-o <dge_dir(counts directory)>\n-m <maximum count of UMIs - over-represented UMIs which have greater than this value are skipped>\n-c <binary file with umicounts - default is UMIcounts.bin in the input SAM directory>\n-t <number of threads (1)>\n-p <bin size for UMI position based filtering i.e 0 bits means reads with identical UMIs are discarded if they have same mapping position; 1 bit means reads with identical UMIs are discarded if their mapping position falls into same 2 basepair bin; 2 bit mean 4 basepair bins etc... \n\nRequired params are -i sample_id -s sym2ref -e ercc_fasta -b barcodes -a aligned_dir -o dge_dir\n\nExample:\n\numimerge_parallel -i RNAseq_20150409 -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -a Aligns -o Counts -t 4 -p 0\n";
+ while ((opt = optparse(&options, "v?hn:go:t:i:s:e:m:c:b:a:p:")) != -1) {
   switch (opt){
 			case 'v':
 			 verbose=1;
 			break;
-			case 'S':
-			 star_sam=1;
-			break;			
+			case 'n':
+			 nbins=atoi(options.optarg);
+			 posMask=(1 << nbins+1) -1;
+			 //set nbins - default is 16 bits otherwise  
+			break;
+			case 'g':
+			 //set gene level filtering - overrides other options
+			 geneLevelFilter=1;
+			break;
 			case 'o':
 			 dge_dir=string(options.optarg);
 			break;
@@ -831,8 +719,7 @@ int main(int argc, char *argv[]){
 				}	
    break;
    case 'p':		 
-    unipos=atoi(options.optarg);
-		  posMask=0x1FF;
+    binSize=atoi(options.optarg);
    break;                 
    case '?':
     fprintf(stderr, "%s parameters are: %s\n", argv[0], errmsg.c_str());
@@ -879,9 +766,7 @@ int main(int argc, char *argv[]){
 	
 	Counts count(nThreads,erccList.size(),geneList.size(),countsFile,maxUmiCounts);
  
- if(star_sam)count.merge_parallel_star(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index,  posMask,unipos);
-	
-	else count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,unipos);
+ count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,binSize,nbins,geneLevelFilter);
 		
 	count.print(dge_dir,sample_id,nThreads,erccList,geneList,wellList);
  return 1;		
