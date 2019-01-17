@@ -60,42 +60,21 @@ class Counts{
 		*spike_total_mm[NWELLS],
 		*spike_umi_mm[NWELLS],   
 		*total_mm[NWELLS],
-		*umi_mm[NWELLS],
-		**umiBarcodes,
-		**uniqueUmiBarcodes,
-		umiCounts[NUMIS],
-		maxUmiCounts;
+		*umi_mm[NWELLS];
+
 		
 		//this hash is necessary to join the unknown hashes	 
 	 unordered_set<string>unknown_set;
   unordered_set<string>unknown_set_w[NWELLS];
   unordered_set<string>unknown_set_mm;
   unordered_set<string>unknown_set_mm_w[NWELLS];
-	 Counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize, string countsFile, unsigned int _maxUmiCounts){
-			init_counts(nThreads,erccListSize,geneListSize);
-			if(_maxUmiCounts){
-			 maxUmiCounts=_maxUmiCounts;
-			 readCountsFile(countsFile.c_str(),umiCounts);
-			}
-		}	
+
 		Counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize){
 			init_counts(nThreads,erccListSize,geneListSize);
 		}	
 	 
   void init_counts(unsigned int nThreads,unsigned int erccListSize, unsigned int geneListSize){
-   maxUmiCounts=0;
-  //set up umi 2-D arrays to keep track of barCodes
-  umiBarcodes=new unsigned int* [nThreads];
-  uniqueUmiBarcodes=new unsigned int* [nThreads];
-  umiBarcodes[0]=new unsigned int [nThreads*NUMIS]; //NUMIS is 4**10 i.e. the size of the UMI
-  uniqueUmiBarcodes[0]=new unsigned int [nThreads*NUMIS];
-  memset(umiBarcodes[0],0,nThreads*NUMIS*sizeof(unsigned int));
-  memset(uniqueUmiBarcodes[0],0,nThreads*NUMIS*sizeof(unsigned int));
-  for (int i=1;i<nThreads;i++){
-	  umiBarcodes[i]=umiBarcodes[i-1]+NUMIS;
-	  uniqueUmiBarcodes[i]=uniqueUmiBarcodes[i-1]+NUMIS;
-	 }
-	 
+
   //allocate memory for total
 		spike_total[0]=new unsigned int[erccListSize*NWELLS];
 		spike_umi[0]=new unsigned int[erccListSize*NWELLS];      
@@ -207,18 +186,9 @@ class Counts{
 			 unknown_set_mm.insert(*itr);
 			}
 		}
-		//combine umicounts
-		for(int tid=1;tid<nThreads;tid++){
-			for(int j=0;j<NUMIS;j++){
-		 	umiBarcodes[0][j]+=umiBarcodes[tid][j];
-		 	uniqueUmiBarcodes[0][j]+=uniqueUmiBarcodes[tid][j];
-			}
-		}	
-		FILE *fp=fopen(umiBarcodesFile.c_str(),"w");
-		for(int j=0;j<NUMIS;j++){
-	  fprintf(fp,"%d\t%s\t%d\t%d\n",j,decodeId(j,UMISIZE).c_str(),umiBarcodes[0][j],uniqueUmiBarcodes[0][j]);	
-		}
-	 fp=fopen(logFile.c_str(),"w");
+
+
+	 FILE *fp=fopen(logFile.c_str(),"w");
 	 if(!fp)exit(EXIT_FAILURE);
 	 fprintf(fp,"Sample_ID\tTotal\tAssigned\tAligned\tSpike_Total\tSpike_UMI\tMito_Total\tMito_UMI\tRefseq_Total\tRefseq_UMI\tUnknown_Total\tUnknown_UMI\n");
 	 fprintf(fp,"%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
@@ -441,9 +411,10 @@ class Counts{
  
 	template <class T1,class T2> void merge_parallel(int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int binSize, int nbins, bool geneLevelFilter){
 		const uint64_t nCategories=geneList.size()+erccList.size()+1; //add1 for chrM
-	 
+	 //fprintf (stderr, "nCategories is %d Gene list size is %d errccList.szie is %d \n",nCategories, geneList.size(),erccList.size());
   #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
   for	(int wellIndex=0; wellIndex<NWELLS; wellIndex++){
+			
 		 //hashes
 		 unordered_set<uint64_t>umi_seen;
    unordered_set<uint64_t>umi_seen_mm;
@@ -474,6 +445,7 @@ class Counts{
 						vector <string> items;
 						vector <string> tempItems;
 						splitStr(fullLine," \t",items);
+
 		 	  splitStr(items[0],":",tempItems);
 		 	  string fullBarcode=tempItems[tempItems.size()-1];
 		 	  
@@ -485,7 +457,6 @@ class Counts{
 			   //skip if ambiguous barcode and get unique barcode index from sequence
 			   unsigned int barcodeIndex=0;
 			   if(ambigCheck(barcode,barcodeIndex))continue;
-	     if(maxUmiCounts && umiCounts[barcodeIndex] > maxUmiCounts)continue;
 			   assigned_reads[tid]++;
 			   assigned_reads_mm[tid]++;
 			   string aligned_id=items[2];
@@ -494,17 +465,18 @@ class Counts{
 			   string read=items[9];
 			   int edit_dist=stoi(splitStrIndex(items[12],":",-1));
 			   int best_hits=stoi(splitStrIndex(items[13],":",-1));
-			    
+			   //the original script does skip this read if any of these are true
 		    if(edit_dist > MAX_EDIT_DISTANCE || best_hits > MAX_BEST || polyACheck(read)) continue;
-		    
 		    vector<string> best_hits_list;
 		    if(items.size() > 19){
 							string best_hits_loc = splitStrIndex(items[19],":",-1);
 			    vector<string> split_loc;
 			    splitStr(best_hits_loc,";",split_loc);
-			    for (int k=0;k<split_loc.size()-1;k++){//extra ; at end so need the -1
-								best_hits_list.push_back(splitStrIndex(split_loc[k],",",0));			
-							} 
+							for (auto iter = split_loc.begin(); iter != split_loc.end(); ++iter){
+							 string geneString=splitStrIndex(*iter,",",0);
+							 if (geneString != "")
+								 best_hits_list.push_back(geneString);			
+							}
 						}
 						assigned_aligned_reads[tid]++;
 						assigned_aligned_reads_mm[tid]++;
@@ -521,9 +493,7 @@ class Counts{
 							 if(!umi_seen.count(umicode)){
 								 umi_seen.insert(umicode);
 								 spike_umi[wellIndex][erccIndex]++;
-								 uniqueUmiBarcodes[tid][barcodeIndex]++;
 							 }
-							 umiBarcodes[tid][barcodeIndex]++;
 							} 
 							spike_total_mm[wellIndex][erccIndex]++;
 							if(!umi_seen_mm.count(umicode)){
@@ -542,9 +512,7 @@ class Counts{
 							 if(!umi_seen.count(umicode)){
 							 	assigned_mito_umi[tid]++;
 							 	umi_seen.insert(umicode);
-							 	uniqueUmiBarcodes[tid][barcodeIndex]++;
-							 }
-							 umiBarcodes[tid][barcodeIndex]++;						
+							 }	
 							} 
 							assigned_mito_reads_mm[tid]++;
 							if(!umi_seen_mm.count(umicode)){
@@ -566,9 +534,7 @@ class Counts{
 							 if(!umi_seen.count(umicode)){
 								 umi[wellIndex][geneIndex]++;
 								 umi_seen.insert(umicode);
-								 uniqueUmiBarcodes[tid][barcodeIndex]++;
-							 }	
-							 umiBarcodes[tid][barcodeIndex]++;
+							 }
 							}
 							total_mm[wellIndex][geneIndex]++;
 							if(!umi_seen_mm.count(umicode)){
@@ -586,9 +552,7 @@ class Counts{
 							 if(!unknown_umi_seen.count(umicode)){
 							  assigned_unknown_umi[tid]++;	
 								 unknown_umi_seen.insert(umicode);
-								 uniqueUmiBarcodes[tid][barcodeIndex]++;	
 							 }
-							 umiBarcodes[tid][barcodeIndex]++;
 							}
 							if(!unknown_set_mm.count(aligned_id)){
 							 unknown_set_mm_w[wellIndex].insert(aligned_id);
@@ -625,7 +589,6 @@ class Counts{
   barcode=fullBarcode.substr(6,UMISIZE); //change if barcode size changes
 		barcodeIndex=0;
 	 if(ambigCheck(barcode,barcodeIndex)) return 0;
-	 if(maxUmiCounts && umiCounts[barcodeIndex] > maxUmiCounts)return 0;
 	 return 1;
 	} 
 	
@@ -653,17 +616,12 @@ class Counts{
  delete[] assigned_mito_umi_mm;
 	delete[] assigned_unknown_reads_mm;
  delete[] assigned_unknown_umi_mm;
- delete[] umiBarcodes[0];
-	delete[] uniqueUmiBarcodes[0];
-	delete[] umiBarcodes;
-	delete[] uniqueUmiBarcodes;
 	}	
 	
 };	
 
 using namespace std;   
 int main(int argc, char *argv[]){
-	unsigned int maxUmiCounts=0;
 	int nbins=16;
 	int binSize=0;
 	uint32_t posMask=(1 << nbins+1) -1;
@@ -703,9 +661,6 @@ int main(int argc, char *argv[]){
    case 'e':
     ercc_fasta=string(options.optarg);
    break;
-   case 'm':
-    maxUmiCounts=atoi(options.optarg);
-   break; 
    case 'c':
     countsFile=string(options.optarg);
    break;  
@@ -764,7 +719,7 @@ int main(int argc, char *argv[]){
 	umipanel<uint32_t,unsigned char> barcodePanel(barcodes.c_str(),mismatchTol,NTol);  		
 	#endif
 	
-	Counts count(nThreads,erccList.size(),geneList.size(),countsFile,maxUmiCounts);
+	Counts count(nThreads,erccList.size(),geneList.size());
  
  count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,binSize,nbins,geneLevelFilter);
  

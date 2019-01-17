@@ -253,6 +253,7 @@ string decodeId(unsigned int id, int size){
 	
 }
 bool multiGeneHit(vector<string> &best_list, string gene, unordered_map<string,string> &refseq_to_gene){
+	//want to check that at least on of the alternative genes in the list is not the same as the top assignment 
 	for(int i=0;i<best_list.size();i++)
 	 if(!refseq_to_gene.count(best_list[i]) || gene != refseq_to_gene[best_list[i]])return 1;
 	return 0; 
@@ -293,50 +294,14 @@ void splitStr(string str,const char *delim, vector<string> &items){
 	}	 	
 }
 string splitStrIndex(string str,const char *delim, int index){
-	//have to make a copy of str in this case
-	vector <string> temp;
-	int n=0;
-	//handle on stack if small which it usually is
-	if(str.size()<1024){
-		char cstr[1024];
-		strcpy(cstr,str.c_str());
-		char *save;
-	 char *p=strtok_r(cstr,delim,&save);
-	 if (!p) {throw std::invalid_argument("delimiter is not found\n");}
-	 while(p){
-			if(index < 0) temp.push_back(string(p));
-			else if(n==index){
-				return string(p);
-			}	 
-			n++;
-	 	p=strtok_r(0,delim,&save);
-	 }
-	 if(index <0 && index+temp.size() >=0){
-			return temp[index+temp.size()];
-		}
-	}
-	//if it is big then malloc
-	else{
-		char *cstr=(char*) malloc(str.size()+1);
-		strcpy(cstr,str.c_str());
-			char *save;
-	 char *p=strtok_r(cstr,delim,&save);
-	 if (!p) {throw std::invalid_argument("delimiter is not found\n");}
-	 while(p){
-			if(index < 0) temp.push_back(string(p));
-			else if(n==index){
-				return string(p);
-			}	 
-			n++;
-	 	p=strtok_r(0,delim,&save);
-	 }
-	 free(cstr);	
-	 if(index <0 && index+temp.size() >=0){
-			return temp[index+temp.size()];
-		}
-	}
-	//if it falls through that means either the index is too big
-	throw std::invalid_argument( "index is out of range\n");
+	vector <string> items;
+	splitStr(str,delim,items);
+	if (!items.size()) return "";
+	if (index < 0 ){
+		index=items.size()+index;
+	}	
+	if (index >= 0 && index < items.size()) return items[index];
+ return "";
 }
 
 string readWells(string filename, unordered_map<string,unsigned int> &well_to_index,vector<string> &wellList){
