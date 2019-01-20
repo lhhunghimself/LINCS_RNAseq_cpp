@@ -36,17 +36,11 @@ OCFLAGS = -std=c99 -Wall -Wextra -g3 ${ALPINE_FLAG}
 .PHONY: clean all all96 all384 
 
 default: all
-all: umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter cleanDeps
-all96: clean directories96 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter 
-all384: clean directories384 umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam umifilter 
+all: umimerge_parallel umisplit cleanDeps
+all96: clean directories96 umimerge_parallel umisplit
+all384: clean directories384 umimerge_parallel umisplit 
 
-OBJ_umifilter = umifilter.o optparse.o 
 OBJ_umisplit = umisplit.o optparse.o 
-OBJ_umisplit_sam = umisplit_sam.o optparse.o 
-OBJ_umimerge = umimerge.o optparse.o 
-OBJ_umimerge_single_pass = umimerge_single_pass.o optparse.o  
-OBJ_umisplit_orig = umisplit_orig.o optparse.o 
-OBJ_umisample = umisample.o optparse.o 
 OBJ_umimerge_parallel = umimerge_parallel.o optparse.o 
 
 directories96: 
@@ -64,35 +58,13 @@ umifilter.o : umifilter.cpp
 umimerge_parallel : $(OBJ_umimerge_parallel)
 	$(LD) -o ${DIR}umimerge_parallel $(LFLAGS) $(OBJ_umimerge_parallel) $(LIBS)
 umimerge_parallel.o : umimerge_parallel.cpp 
-	$(CPP) $(CFLAGS) -c umimerge_parallel.cpp	
-umimerge : $(OBJ_umimerge)
-	$(LD) -o ${DIR}umimerge $(LFLAGS) $(OBJ_umimerge) $(LIBS)
-umimerge.o : umimerge.cpp 
-	$(CPP) $(CFLAGS) -c umimerge.cpp		
-umimerge_single_pass : $(OBJ_umimerge_single_pass)
-	$(LD) -o ${DIR}umimerge_single_pass $(LFLAGS) $(OBJ_umimerge_single_pass) $(LIBS)
-umimerge_single_pass.o : umimerge_single_pass.cpp 
-	$(CPP) $(CFLAGS) -c umimerge_single_pass.cpp			
+	$(CPP) $(CFLAGS) -c umimerge_parallel.cpp			
 
 umisplit : $(OBJ_umisplit)
 	$(LD) -o ${DIR}umisplit $(LFLAGS) $(OBJ_umisplit) $(LIBS)
 umisplit.o : umisplit.cpp 
 	$(CPP) $(CFLAGS) -c umisplit.cpp			
-
-umisplit_sam : $(OBJ_umisplit_sam)
-	$(LD) -o ${DIR}umisplit_sam $(LFLAGS) $(OBJ_umisplit_sam) $(LIBS)
-umisplit_sam.o : umisplit_sam.cpp 
-	$(CPP) $(CFLAGS) -c umisplit_sam.cpp			
 	
-umisplit_orig : $(OBJ_umisplit_orig)
-	$(LD) -o ${DIR}umisplit_orig $(LFLAGS) $(OBJ_umisplit_orig) $(LIBS)
-umisplit_orig.o : umisplit_orig.cpp 
-	$(CPP) $(CFLAGS) -c umisplit_orig.cpp		
-	
-umisample : $(OBJ_umisample)
-	$(LD) -o ${DIR}umisample $(LFLAGS) $(OBJ_umisample) $(LIBS)
-umisample.o : umisample.cpp 
-	$(CPP) $(CFLAGS) -c umisample.cpp
 optparse.o : optparse/optparse.c
 	$(CC) $(OCFLAGS) -c optparse/optparse.c
 #endif
@@ -104,4 +76,4 @@ cleanDeps:
 	-@rm -rf core.* 2>/dev/null || true
 
 cleanBins: 
-	-@rm  -f umimerge_parallel umimerge umimerge_single_pass umisplit_orig umisample umisplit umisplit_sam
+	-@rm  -f umimerge_parallel umisplit

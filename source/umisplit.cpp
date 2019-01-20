@@ -261,7 +261,7 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}
 		if(!fwrite(umiBarcodes[0],sizeof(unsigned int)*NUMIS,1,fp)){
-			fprintf(stderr,"error in writing UMI counts %s\n");
+			fprintf(stderr,"error in writing UMI counts\n");
 			exit(1);
 		}			
 		fclose(fp); 
