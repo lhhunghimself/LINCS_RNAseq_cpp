@@ -405,11 +405,7 @@ class Counts{
 	 fclose(fp);		
 	}
  
-
- 
-
- 
-	template <class T1,class T2> void merge_parallel(int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int binSize, int nbins, bool geneLevelFilter){
+	template <class T1,class T2> void merge_parallel (int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int binSize, int nbins, bool geneLevelFilter){
 		const uint64_t nCategories=geneList.size()+erccList.size()+1; //add1 for chrM
 	 //fprintf (stderr, "nCategories is %d Gene list size is %d errccList.szie is %d \n",nCategories, geneList.size(),erccList.size());
   #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
@@ -420,10 +416,10 @@ class Counts{
    unordered_set<uint64_t>umi_seen_mm;
 	  unordered_set<string>unknown_umi_seen;
 	  unordered_set<string>unknown_umi_seen_mm;
-	 	//find matching files in the separated wells directory - we skip X - i.e. unmappables now
+
  		vector<string> inputFiles;
  	 glob_t glob_result;
-		 //string well=(wellIndex >=NWELLS) ? "X" :barcodePanel.wells[wellIndex];
+
 		 string well=barcodePanel.wells[wellIndex];
 		 string globString=aligned_dir+"/"+well+"/"+"*.sam";
 			glob(globString.c_str(),GLOB_TILDE,NULL,&glob_result);
@@ -570,6 +566,96 @@ class Counts{
 		}
 	}
 	
+ 
+	template <class T1,class T2> void merge_filter(int nThreads,vector<string> &erccList ,vector<string> &geneList, vector<string> &wellList, string aligned_dir, umipanel<T1,T2> &barcodePanel,  unordered_map<string,string> refseq_to_gene,unordered_map<string,unsigned int>well_to_index,unordered_map<string,unsigned int>ercc_to_index,unordered_map<string,unsigned int>gene_to_index, uint32_t posMask, int binSize, int nbins, bool geneLevelFilter){
+		const uint64_t nCategories=geneList.size()+erccList.size()+1; //add1 for chrM
+		
+  //each thread works on a well
+  #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
+  for	(int wellIndex=0; wellIndex<NWELLS; wellIndex++){
+		 //hashes
+		 unordered_set<uint64_t>umi_seen;
+   unordered_set<uint64_t>umi_seen_mm;
+	  
+	  uint64_t mask63 = (1ULL << 63) -1; //all 1's except for left most bit
+	  
+	 	//find matching files in the separated wells directory - we skip X - i.e. unmappables now
+ 		vector<string> inputFiles;
+ 	 glob_t glob_result;
+		 //string well=(wellIndex >=NWELLS) ? "X" :barcodePanel.wells[wellIndex];
+		 string well=barcodePanel.wells[wellIndex];
+		 string globString=aligned_dir+"/"+well+"/"+"*.saf";
+			glob(globString.c_str(),GLOB_TILDE,NULL,&glob_result);
+		 for(int j=0; j<glob_result.gl_pathc; j++){
+				inputFiles.push_back(string(glob_result.gl_pathv[j]));
+		 }
+			for(int i=0;i<inputFiles.size();i++){
+				const unsigned int tid=omp_get_thread_num();
+				uint64_t umicode;
+				fprintf(stderr,"thread %d of %d working on %s\n",tid,nThreads,inputFiles[i].c_str());
+				//read in each file
+				FILE *fp=fopen(inputFiles[i].c_str(),"r");
+				while (fread(&umicode,sizeof(uint64_t),1,fp)){
+					uint32_t category;
+					bool multiGeneHit=(bool) (umicode >> 63);
+					umicode=umicode & mask63;
+					if(geneLevelFilter) category=umicode % nCategories;
+					else category = (umicode >> nbins) % nCategories;
+					assigned_aligned_reads[tid]++;
+					assigned_aligned_reads_mm[tid]++;
+					
+				 if (category == nCategories -1){
+							//mitochondrial
+						assigned_mito_reads_mm[tid]++;
+						if (!multiGeneHit){
+							assigned_mito_reads[tid]++;
+						 if(!umi_seen.count(umicode)){
+						 	umi_seen.insert(umicode);
+						  assigned_mito_umi[tid]++;
+						 }
+						}
+						if(!umi_seen_mm.count(umicode)){
+							umi_seen_mm.insert(umicode);
+						 assigned_mito_umi_mm[tid]++;
+						}
+					}
+					else if (category >= geneList.size()){
+						//spike
+						const unsigned int erccIndex=category-geneList.size();
+						spike_total_mm[wellIndex][erccIndex]++;
+						if (!multiGeneHit){
+							spike_total[wellIndex][erccIndex]++;
+						 if(!umi_seen.count(umicode)){
+							 umi_seen.insert(umicode);
+						  spike_umi[wellIndex][erccIndex]++;	
+						 }
+						}
+						if(!umi_seen_mm.count(umicode)){
+							umi_seen_mm.insert(umicode);
+						 spike_umi_mm[wellIndex][erccIndex]++;	
+						}						
+					}
+					else{
+						const unsigned int geneIndex=category;
+						total_mm[wellIndex][geneIndex]++;
+						if (!multiGeneHit){
+						 total[wellIndex][geneIndex]++;
+						 if(!umi_seen.count(umicode)){
+						 	umi_seen.insert(umicode);
+						  umi[wellIndex][geneIndex]++;	
+						 }
+						}
+						if(!umi_seen_mm.count(umicode)){
+						 umi_seen_mm.insert(umicode);
+						 umi_mm[wellIndex][geneIndex]++;	
+						}
+					}		
+				}	
+			 fclose(fp);
+			}
+		}
+	}
+	
 	bool checkPush(vector<string> items, MapPosition &best_hit_list){
 		//check if it has been seen
 		//>= is used to check MAX_BEST because the best hit is also in the list unlike the code for bwa where the extra hits are in the list
@@ -625,14 +711,14 @@ int main(int argc, char *argv[]){
 	int nbins=16;
 	int binSize=0;
 	uint32_t posMask=(1 << nbins+1) -1;
-	bool geneLevelFilter=0;
+	bool geneLevelFilter=0,filteredSAMfiles=0;
 	string sample_id="",sym2ref="", ercc_fasta="", barcodes="", aligned_dir="", dge_dir="",countsFile="";
 	int opt,verbose=0,nThreads=1;
 	struct optparse options;
  optparse_init(&options, argv);	
  
  string errmsg="umimerge_parallel vh?i:g:n:p:e:a:s:b:o:t:\n-h -?  (display this message)\n-v (Verbose mode)\n-i <sample_id>\n-s <sym2ref file>\n-e <ercc_fasta file>\n-b <barcode_file>\n-a <aligns directory>\n-o <dge_dir(counts directory)>\n-m <maximum count of UMIs - over-represented UMIs which have greater than this value are skipped>\n-c <binary file with umicounts - default is UMIcounts.bin in the input SAM directory>\n-t <number of threads (1)>\n-p <bin size for UMI position based filtering i.e 0 bits means reads with identical UMIs are discarded if they have same mapping position; 1 bit means reads with identical UMIs are discarded if their mapping position falls into same 2 basepair bin; 2 bit mean 4 basepair bins etc... \n\nRequired params are -i sample_id -s sym2ref -e ercc_fasta -b barcodes -a aligned_dir -o dge_dir\n\nExample:\n\numimerge_parallel -i RNAseq_20150409 -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -a Aligns -o Counts -t 4 -p 0\n";
- while ((opt = optparse(&options, "v?hn:go:t:i:s:e:m:c:b:a:p:")) != -1) {
+ while ((opt = optparse(&options, "v?hfn:go:t:i:s:e:m:c:b:a:p:")) != -1) {
   switch (opt){
 			case 'v':
 			 verbose=1;
@@ -641,6 +727,10 @@ int main(int argc, char *argv[]){
 			 nbins=atoi(options.optarg);
 			 posMask=(1 << nbins+1) -1;
 			 //set nbins - default is 16 bits otherwise  
+			break;
+			case 'f':
+			 //use filtered SAM files and not sam files
+			 filteredSAMfiles=1;
 			break;
 			case 'g':
 			 //set gene level filtering - overrides other options
@@ -721,9 +811,8 @@ int main(int argc, char *argv[]){
 	
 	Counts count(nThreads,erccList.size(),geneList.size());
  
- count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,binSize,nbins,geneLevelFilter);
- 
-		
+ if (filteredSAMfiles) count.merge_filter(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,binSize,nbins,geneLevelFilter);
+ else count.merge_parallel(nThreads,erccList,geneList,wellList,aligned_dir,barcodePanel,refseq_to_gene,well_to_index,ercc_to_index,gene_to_index, posMask,binSize,nbins,geneLevelFilter);
 	count.print(dge_dir,sample_id,nThreads,erccList,geneList,wellList);
  return 1;		
 	 

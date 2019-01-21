@@ -33,15 +33,16 @@ MKDIR_P = mkdir -p
 OCFLAGS = -std=c99 -Wall -Wextra -g3 ${ALPINE_FLAG}
 
 
-.PHONY: clean all all96 all384 
+.PHONY: clean cleanDeps cleanBins all all96 all384 
 
 default: all
-all: umimerge_parallel umisplit cleanDeps
-all96: clean directories96 umimerge_parallel umisplit
-all384: clean directories384 umimerge_parallel umisplit 
+all: all96 all384 clean
+all96: clean directories96 umimerge_parallel umimerge_filter umisplit 
+all384: clean directories384 umimerge_parallel umimerge_filter umisplit
 
 OBJ_umisplit = umisplit.o optparse.o 
 OBJ_umimerge_parallel = umimerge_parallel.o optparse.o 
+OBJ_umimerge_filter = umimerge_filter.o optparse.o 
 
 directories96: 
 	$(eval DIR+=w96/) 
@@ -50,15 +51,17 @@ directories384:
 	$(eval DIR+=w384/) 
 	$(eval NWELLS+=w384/) 
 	${MKDIR_P} ${DIR} 
-umifilter : $(OBJ_umifilter)
-	$(LD) -o ${DIR}umifilter $(LFLAGS) $(OBJ_umifilter) $(LIBS)
-umifilter.o : umifilter.cpp 
-	$(CPP) $(CFLAGS) -c umifilter.cpp	
+
 
 umimerge_parallel : $(OBJ_umimerge_parallel)
 	$(LD) -o ${DIR}umimerge_parallel $(LFLAGS) $(OBJ_umimerge_parallel) $(LIBS)
 umimerge_parallel.o : umimerge_parallel.cpp 
 	$(CPP) $(CFLAGS) -c umimerge_parallel.cpp			
+	
+umimerge_filter : $(OBJ_umimerge_filter)
+	$(LD) -o ${DIR}umimerge_filter $(LFLAGS) $(OBJ_umimerge_filter) $(LIBS)
+umimerge_filter.o : umimerge_filter.cpp 
+	$(CPP) $(CFLAGS) -c umimerge_filter.cpp			
 
 umisplit : $(OBJ_umisplit)
 	$(LD) -o ${DIR}umisplit $(LFLAGS) $(OBJ_umisplit) $(LIBS)
@@ -67,7 +70,7 @@ umisplit.o : umisplit.cpp
 	
 optparse.o : optparse/optparse.c
 	$(CC) $(OCFLAGS) -c optparse/optparse.c
-#endif
+
 clean: cleanBins cleanDeps
 
 cleanDeps:
@@ -76,4 +79,4 @@ cleanDeps:
 	-@rm -rf core.* 2>/dev/null || true
 
 cleanBins: 
-	-@rm  -f umimerge_parallel umisplit
+	-@rm  -f umimerge_parallel umisplit umimerge_filter

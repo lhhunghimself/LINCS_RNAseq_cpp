@@ -22,6 +22,7 @@
 #endif
 #define  UMISIZE 10
 #define  NUMIS 1048576 //4**10 - for 10 base UMI
+#define SAMLINESIZE 1024
 using namespace std;
 unsigned int hashCode4(string &sequence);
 bool ambigCheck(string &sequence,unsigned int &code);
@@ -398,3 +399,13 @@ bool readCountsFile(const char *fileName, unsigned int *counts){
 	fclose(fp);
 	return(1);
 }			
+bool filterSAMoutput(){
+	char buffer[SAMLINESIZE];
+	memset(buffer,0,sizeof(buffer));
+	while(fgets(buffer, SAMLINESIZE, stdin)){
+		if (buffer[0] != '@'){
+			fputs(buffer,stdout);
+		} 
+ }
+ return 1;
+}
