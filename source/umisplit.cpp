@@ -38,7 +38,7 @@ int main(int argc, char *argv[]){
  vector<string> inputFiles;
  
  //parse flags
- while ((opt = optparse(&options, "h?vft:z:s:m:N:o:b:l:q:c:")) != -1) {
+ while ((opt = optparse(&options, "h?vft:zs:m:N:o:b:l:q:c:")) != -1) {
   switch (opt){
 			case 'v':
 			 verbose=1;
