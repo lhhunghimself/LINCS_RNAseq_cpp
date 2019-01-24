@@ -1,9 +1,9 @@
 
-#Cpp based tools for barcoded RNAseq
+# Cpp based tools for barcoded RNAseq
 
 This a set of cpp binaries and scripts for (Unique Molecular Identifier) UMI based RNAseq. The pre-print is available [here.](https://www.biorxiv.org/content/10.1101/345819v2)  These are decendants of python scripts describe  [here.](https://www.biorxiv.org/content/early/2014/03/05/003236)  (https://www.biorxiv.org/content/early/2014/03/05/003236) used to split fastq files before alignment and merge files after alignment by bwa. All the binaries are multithreaded unless otherwise stated.
 
-##To compile and run
+## To compile and run
 ### Clone repo
 	git clone https://github.com
 ### Compile executable
