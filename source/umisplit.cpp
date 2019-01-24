@@ -17,7 +17,7 @@ bool Ncheck(const char *seq, const int size);
 
 
 KSEQ_INIT(gzFile, gzread);  
-string errmsg="umisplit h?vft:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-c <the file to output the umicounts to - default is UMIcounts.bin in the output directory>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
+string errmsg="umisplit h?vft:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-z Compress the output as gzip files\n-s The maximum size of the split file in KB\n\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-c <the file to output the umicounts to - default is UMIcounts.bin in the output directory>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
   
 int main(int argc, char *argv[]){
 	bool compressFlag=0;
@@ -252,7 +252,6 @@ int main(int argc, char *argv[]){
 			umiBarcodes[tid][umiBarcodeIndex]++;
 			if(compressFlag) ofpgz=ofpsgz[barcodeIndex];
 			else ofp=ofps[barcodeIndex];
-			
 		 if(maxSize){
 			 uint16_t lineBytes=strlen(seq2->name.s)+strlen(seq2->seq.s)+UMILength+strlen(seq2->qual.s)+7;
 			 if (barcodeIndex && lineBytes+fileSizes[barcodeIndex] > maxSize){
