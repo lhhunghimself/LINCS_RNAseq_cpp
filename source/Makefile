@@ -26,12 +26,13 @@ else
  endif
 endif
 LIBS= -lboost_filesystem -lboost_system -lgomp -lm -lc -lgcc -lrt -lz
+MERGELIBS= -lm -lc -lgcc -lrt -lz
 MKDIR_P = mkdir -p
 #ifdef ALPINE
  ALPINE_FLAG= -fPIC -static
 #endif
 OCFLAGS = -std=c99 -Wall -Wextra -g3 ${ALPINE_FLAG}
-
+LFLAGS = -static-libstdc++
 
 .PHONY: clean cleanDeps cleanBins all all96 all384 
 
@@ -59,7 +60,7 @@ umimerge_parallel.o : umimerge_parallel.cpp
 	$(CPP) $(CFLAGS) -c umimerge_parallel.cpp			
 	
 umimerge_filter : $(OBJ_umimerge_filter)
-	$(LD) -o ${DIR}umimerge_filter $(LFLAGS) $(OBJ_umimerge_filter) $(LIBS)
+	$(LD) -o ${DIR}umimerge_filter -static-libstdc++ $(OBJ_umimerge_filter) $(MERGELIBS)
 umimerge_filter.o : umimerge_filter.cpp 
 	$(CPP) $(CFLAGS) -c umimerge_filter.cpp			
 
