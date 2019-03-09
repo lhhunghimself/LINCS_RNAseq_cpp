@@ -143,7 +143,7 @@ Example:
 umisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz
 ```
 
-#### umimerge_parallel: 
+### umimerge_parallel: 
 
 #### Description
 Takes sam files organized by plate wells and counts the reads mapped to each gene. The original gene level filtering scheme used by the Python script (i.e. reads with the same barcode and same gene mapping are filtered) is supported by the -g option. Otherwise position level filtering is used where reads with the same barcode that map to the same position in the gene are filtered which is the scheme from the original UMI paper. Each thread handles a different sam file.
@@ -170,6 +170,28 @@ Example:
 
 umimerge_parallel -i RNAseq_20150409 -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -a Aligns -o Counts -t 4 -p 0
 
+```
+### umimerge_filter:
+
+umimerge_filter is experimental. It takes samfile output for an aligned read and writes a 16 bit hashvalue for the gene and map position.
+
+```
+umimerge_filter parameters are: umimerge_filter vh?i:g:n:e:b:o:
+-h -?  (display this message)
+-v (Verbose mode)
+-g Filter identical UMIs that map to same gene
+-i <sample_id>
+-s <sym2ref file>
+-e <ercc_fasta file>
+-b <barcode_file>
+-p <bin size for UMI position based filtering i.e 0 bits means reads with identical UMIs are discarded if they have same mapping position; 1 bit means reads with identical UMIs are discarded if their mapping position falls into same 2 basepair bin; 2 bit mean 4 basepair bins etc... 
+
+umimerge_filter is experimental. It takes samfile output for an aligned read and writes a 16 bit hashvalue for the gene and map position. Required params are -i sample_id -s sym2ref -e ercc_fasta -b barcodes -a aligned_dir -o dge_dir
+
+Example:
+
+cat myFile.sam | umimerge_filter  -s  References/Broad_UMI/Human_RefSeq/refGene.hg19.sym2ref.dat -e References/Broad_UMI/ERCC92.fa -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -p 0 > myOutputFile.saf
+ 
 ```
 
 ## Documentation of scripts provided

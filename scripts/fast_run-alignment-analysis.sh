@@ -29,7 +29,7 @@ BARCODE_FILE="${REF_DIR}/barcodes_trugrade_96_set4.dat"
 PROG_DIR="$DATA_DIR/Programs/Broad-DGE"
 BWA_ALN_SEED_LENGTH=24
 BWA_SAM_MAX_ALIGNS_FOR_XA_TAG=20
-THREAD_NUMBER=8
+THREAD_NUMBER=6
 
 # 2 Computation
 
@@ -49,11 +49,13 @@ done
  #split into wells
  #use tight checking no mismatch no ambiguities to match original - default is the looser setting of mismatch =1 and missing N=1 
 
-echo "${UMITOOLS_DIR}/source/w96/umisplit -v -l 16 -m 1 -N 1 -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES"
-$UMITOOLS_DIR/source/w96/umisplit -v -l 16 -m 0 -N 0 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
+echo "$UMITOOLS_DIR/source/umisplit2 -v -l 16 -m 0 -N 0 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES"
+$UMITOOLS_DIR/source/umisplit2 -v -l 16 -m 0 -N 0 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
+#echo "$UMITOOLS_DIR/source/w96/umisplit -v -l 16 -m 0 -N 0 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES"
+#$UMITOOLS_DIR/source/w96/umisplit -v -l 16 -m 0 -N 0 -f -o $ALIGN_DIR -t $THREAD_NUMBER -b $BARCODE_FILE $SEQ_FILES
 
-echo "${UMITOOLS_DIR}/scripts/multibwa.sh $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER"
-$UMITOOLS_DIR/scripts/multibwa.sh $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER
+#echo "${UMITOOLS_DIR}/scripts/multibwa.sh $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER"
+#$UMITOOLS_DIR/scripts/multibwa.sh $TOP_DIR $REF_DIR $SPECIES_DIR $ALIGN_DIR $BWA_ALN_SEED_LENGTH $BWA_SAM_MAX_ALIGNS_FOR_XA_TAG $THREAD_NUMBER
 
-echo "${UMITOOLS_DIR}/source/w96/umimerge_parallel -g -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
-$UMITOOLS_DIR/source/w96/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER
+#echo "${UMITOOLS_DIR}/source/w96/umimerge_parallel -g -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER"
+#$UMITOOLS_DIR/source/w96/umimerge_parallel -i $SAMPLE_ID -s $SYM2REF_FILE -e $ERCC_SEQ_FILE -b $BARCODE_FILE -a $ALIGN_DIR -o $COUNT_DIR -t $THREAD_NUMBER

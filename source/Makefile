@@ -42,6 +42,7 @@ all96: clean directories96 umimerge_parallel umimerge_filter umisplit
 all384: clean directories384 umimerge_parallel umimerge_filter umisplit
 
 OBJ_umisplit = umisplit.o optparse.o 
+OBJ_umisplit2 = umisplit2.o optparse.o 
 OBJ_umimerge_parallel = umimerge_parallel.o optparse.o 
 OBJ_umimerge_filter = umimerge_filter.o optparse.o 
 
@@ -67,8 +68,13 @@ umimerge_filter.o : umimerge_filter.cpp
 umisplit : $(OBJ_umisplit)
 	$(LD) -o ${DIR}umisplit $(LFLAGS) $(OBJ_umisplit) $(LIBS)
 umisplit.o : umisplit.cpp 
-	$(CPP) $(CFLAGS) -c umisplit.cpp			
-	
+	$(CPP) $(CFLAGS) -c umisplit.cpp
+				
+umisplit2 : $(OBJ_umisplit2)
+	$(LD) -o ${DIR}umisplit2 $(LFLAGS) $(OBJ_umisplit2) $(LIBS)
+umisplit2.o : umisplit2.cpp 
+	$(CPP) $(CFLAGS) -c umisplit2.cpp
+		
 optparse.o : optparse/optparse.c
 	$(CC) $(OCFLAGS) -c optparse/optparse.c
 
