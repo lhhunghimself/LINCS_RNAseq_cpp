@@ -54,7 +54,6 @@ directories384:
 	$(eval NWELLS+=w384/) 
 	${MKDIR_P} ${DIR} 
 
-
 umimerge_parallel : $(OBJ_umimerge_parallel)
 	$(LD) -o ${DIR}umimerge_parallel $(LFLAGS) $(OBJ_umimerge_parallel) $(LIBS)
 umimerge_parallel.o : umimerge_parallel.cpp 
@@ -69,11 +68,6 @@ umisplit : $(OBJ_umisplit)
 	$(LD) -o ${DIR}umisplit $(LFLAGS) $(OBJ_umisplit) $(LIBS)
 umisplit.o : umisplit.cpp 
 	$(CPP) $(CFLAGS) -c umisplit.cpp
-				
-umisplit2 : $(OBJ_umisplit2)
-	$(LD) -o ${DIR}umisplit2 $(LFLAGS) $(OBJ_umisplit2) $(LIBS)
-umisplit2.o : umisplit2.cpp 
-	$(CPP) $(CFLAGS) -c umisplit2.cpp
 		
 optparse.o : optparse/optparse.c
 	$(CC) $(OCFLAGS) -c optparse/optparse.c
