@@ -13,13 +13,17 @@ extern "C" {
 bool checkNames(char *line1,char *line2);
 bool Ncheck(const char *seq, const int size);
 bool getLines(gzFile fp1, gzFile fp2, char *bufferR1[], char *bufferR2, bool *mismatch);
+bool closeFile(FILE *fp,gzFile gzfp, string filename,bool writeFile);
+bool writeFilename(string filename,string suffix);
+
+
 #define R1_LENGTH 16 //default UMI length
 
 
-string errmsg="umisplit h?vft:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-z Compress the output as gzip files\n-s The maximum size of the split file in KB\n\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-c <the file to output the umicounts to - default is UMIcounts.bin in the output directory>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
+string errmsg="umisplit h?vftd:m:N:o:b:l:q:\n-h -? (display this message)\n-v (Verbose mode)\n-f (filter and discard reads with ambiguous UMI and barcode (default is to keep))\n-z Compress the output as gzip files\n-s The maximum size of the split file in KB\n\n-l <Length of UMI (16):\n-t <number of threads(1)>\n-q <minimum quality of UMI base pair before changed to N (10)>-b <barcode file>\n-m <maximum number of mismatches tolerated in barcode (0)>\n-c <the file to output the umicounts to - default is UMIcounts.bin in the output directory>\n-N <maximum number of ambiguous base pairs tolerated in barcode (0)>\n-o <Output Directory>\n<R1file.1> <R2file.1>..<R1file.N> <R2file.N>\n\nExample:\numisplit -b References/Broad_UMI/barcodes_trugrade_96_set4.dat -o Aligns sample1_R1.fastq.gz sample1_R2.fastq.gz sample2_R1.fastq.gz sample2_R2.fastq.gz\n";
   
 int main(int argc, char *argv[]){
-    bool compressFlag=0;
+    bool compressFlag=0,writeDoneFiles=0;
     char verbose=0,barcode=0;
     uint64_t maxSizeKB=0;  
     int l1,l2,emptySeqs=0,nameMismatch=0,minQual=10,UMILength=R1_LENGTH,nArgs=0;
@@ -37,10 +41,13 @@ int main(int argc, char *argv[]){
     vector<string> inputFiles;
  
  //parse flags
-    while ((opt = optparse(&options, "h?vft:zs:m:N:o:b:l:q:c:")) != -1) {
+    while ((opt = optparse(&options, "h?vdft:zs:m:N:o:b:l:q:c:")) != -1) {
         switch (opt){
             case 'v':
                 verbose=1;
+			break;
+			case 'd':
+				writeDoneFiles=1;
 			break;
 			case 'f':
                 filter=1;
@@ -106,15 +113,16 @@ int main(int argc, char *argv[]){
 		fprintf(stderr,"Maximum number of mismatches in barcode %d\n",mismatchTol);		
 		fprintf(stderr,"Maximum number of unknown bases in barcode %d\n",NTol);
 		if(filter)fprintf(stderr,"filtering out unmatched barcodes \n");
+		if(writeDoneFiles)fprintf(stderr,"writing out a file to indicate that we have finished with writing\n");
     else (stderr,"saving unmatched barcodes to 'X' directory \n");
 		int i=0;
 		while (i<inputFiles.size()){
-		 fprintf(stderr,"R1 file %s\n",inputFiles[i++].c_str());
-		 if(i == inputFiles.size()){
+			fprintf(stderr,"R1 file %s\n",inputFiles[i++].c_str());
+			if(i == inputFiles.size()){
 				fprintf(stderr,"missing corresponding R2 file\n");
 				exit(EXIT_FAILURE);
 			}
-		fprintf(stderr,"R2 file %s\n",inputFiles[i++].c_str());		
+			fprintf(stderr,"R2 file %s\n",inputFiles[i++].c_str());		
 		}		
 	}
     fs::create_directory(fs::system_complete(outputDir));
@@ -139,8 +147,6 @@ int main(int argc, char *argv[]){
         auto p=fs::path(outputDir+"/X");
         fs::create_directory(fs::system_complete(p));
 	}
-	
-
     #pragma omp parallel for num_threads (nThreads) schedule (dynamic)
 	for (int i=0;i<inputFiles.size();i+=2){
 		const uint64_t maxSize=1024*maxSizeKB;
@@ -160,12 +166,17 @@ int main(int argc, char *argv[]){
   
         fs::path R1(inputFiles[i]);
         fs::path R2(inputFiles[i+1]);
-        string R1stem;
-        if (R1.extension().string() == "gz" && (R1.stem().extension().string() == "fastq" || (R1.stem().extension().string() == ".fq")))   
-            R1stem=R1.stem().stem().string();
-        else 
-            R1stem=R1.stem().string();
+        string R1stem,R2stem;
+        R1=R1.stem();
+        R2=R2.stem();
+        while (R1.extension().string() == ".gz" || R1.extension().string() == ".fastq" || R1.extension().string() == ".fq")   
+			R1=R1.stem();
+		while (R2.extension().string() == ".gz" || R2.extension().string() == ".fastq" || R2.extension().string() == ".fq")   
+			R2=R2.stem();   
+        R1stem=R1.stem().string();
+        R2stem=R2.stem().string();
         FILE *ofp,*ofps[NWELLS+1];
+        vector<string> filenames(NWELLS+1);
         gzFile ofpgz,ofpsgz[NWELLS+1];
         uint64_t fileSizes[NWELLS+1];
         uint16_t numberofFiles[NWELLS+1];
@@ -173,6 +184,7 @@ int main(int argc, char *argv[]){
         memset(numberofFiles,0,sizeof(numberofFiles));
   
         for(int j=0;j<NWELLS+1;j++){
+			//zeroing is necessary - we use the zero value in the file pointer instead of passing the compress flag to know which type to use for opening/closing
 			ofps[j]=0;
 			ofpsgz[j]=0;
 			string file;
@@ -188,7 +200,8 @@ int main(int argc, char *argv[]){
                     if(!ofps[j]){
                         fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
                     }
-				}	
+				}
+				filenames[j]=file;	
 			}	
 			else if(j){
                 file =outputDir+"/"+barcodePanel[tid]->wells[j-1]+"/"+R1stem+"R2_"+barcodePanel[tid]->wells[j-1]+"_"+std::to_string(numberofFiles[j])+".fq";
@@ -202,6 +215,7 @@ int main(int argc, char *argv[]){
                         fprintf(stderr,"%s unable to open file %s\n",inputFiles[i].c_str(),file.c_str());
                     }	
                 }
+                filenames[j]=file;	
                 numberofFiles[j]++;
             }
         }
@@ -229,25 +243,26 @@ int main(int argc, char *argv[]){
 			string umiBarcode(linesR1[1]+wellSequenceSize,UMILength-wellSequenceSize);
 			unsigned int  umiBarcodeIndex=0;
 			if (filter && ambigCheck(umiBarcode,umiBarcodeIndex)) continue;
+			ofp=0;ofpgz=0;
 			if(compressFlag) ofpgz=ofpsgz[barcodeIndex];
 			else ofp=ofps[barcodeIndex];
             //check maxSize when writing
             if(maxSize){
                 uint16_t lineBytes=strlen(linesR2)+strlen(linesR1[0])+UMILength+7;
                 if (barcodeIndex && lineBytes+fileSizes[barcodeIndex] > maxSize){
+					closeFile(ofp,ofpgz,filenames[barcodeIndex],writeDoneFiles);
 					string file =outputDir+"/"+barcodePanel[tid]->wells[barcodeIndex-1]+"/"+R1stem+"R2_"+barcodePanel[tid]->wells[barcodeIndex-1]+"_"+std::to_string(numberofFiles[barcodeIndex])+".fq";
 					if (compressFlag){
-					 gzclose(ofpgz);
 					 file=file+".gz";
 					 ofpsgz[barcodeIndex]=gzopen(file.c_str(),"wb");	
 					 ofpgz=ofpsgz[barcodeIndex];
 					}
 					else{
-						fclose(ofp);
                         ofps[barcodeIndex]=fopen(file.c_str(),"w");
                         ofp=ofps[barcodeIndex];
 					}
                     numberofFiles[barcodeIndex]++;
+                    filenames[barcodeIndex]=file;
 					fileSizes[barcodeIndex]=0;
 				}
                 fileSizes[barcodeIndex]+=lineBytes;
@@ -272,18 +287,16 @@ int main(int argc, char *argv[]){
                 else fwrite(buffer,1,bufPtr-buffer,ofp);
 			}
 		}
-		if(!filter){
-			if (compressFlag){
-				gzclose(ofpsgz[0]);
-			}
-			else fclose(ofps[0]);
-		}		   
+		//if not filtered we write the unreadable barcodes to another file
+		if(!filter)closeFile(ofps[0],ofpsgz[0],"",0);
+		 
 		for(int j=1;j<NWELLS+1;j++){
-			if (compressFlag) gzclose(ofpsgz[j]);
-			else fclose(ofps[j]);
-		}  
-        gzclose(fp1);
-        gzclose(fp2);		 	 	
+			closeFile(ofps[j],ofpsgz[j],filenames[j],writeDoneFiles);
+		}
+		string outputFileR1=outputDir+"/"+R1stem;
+		string outputFileR2=outputDir+"/"+R2stem;
+		closeFile(0,fp1,outputFileR1,writeDoneFiles);
+		closeFile(0,fp2,outputFileR2,writeDoneFiles);		
 	}
     delete[] barcodePanel;
     return 0;  
@@ -324,4 +337,21 @@ bool Ncheck(const char *seq, const int size){
 	for(int i=0;i<size;i++)
 	 if(seq[i] == 'N')return 1;
 	return 0;
+}
+bool closeFile(FILE *fp,gzFile gzfp, string filename,bool writeFile){
+	if (fp) fclose(fp);
+	else if (gzfp) gzclose(gzfp);
+	else return 1;
+	if (writeFile) writeFilename(filename,"done");
+	return 0;	
+}
+bool writeFilename(string filename,string suffix){
+	string outputFilename=filename+"."+suffix;
+	FILE *fp = fopen(outputFilename.c_str(),"w");
+	if (fp){
+		fprintf(fp,"%s",filename.c_str());
+		fclose(fp);
+		return 0;
+	}
+	return 1;
 }
