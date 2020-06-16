@@ -1,0 +1,4 @@
+Add #include <stdint.h> to kthread.c (alpine)
+replacing u_int32_t by uint32_t (alpine)
+replace <emmintrin.h> with "sse2neon.h" in ksw.c (ARM)
+version matched with x86 version
