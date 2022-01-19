@@ -1,6 +1,9 @@
 CC=gcc
 CPP=g++
 LD=g++ -L /usr/local/lib
+ifndef noSSE
+ sse3FLAG=-msse3
+endif
 ifndef ARM64
  m64FLAG=-m64
 endif
@@ -21,15 +24,15 @@ else
    endif
   else
    ifdef 32Bit
-    CFLAGS= -I./ -I./optparse -Ofast -std=c++11 -fexpensive-optimizations -funroll-all-loops -ffast-math -finline-functions -fopenmp -msse3 -frerun-loop-opt ${STATIC_FLAG} $(HDRS) $(DEFINES)
+    CFLAGS= -I./ -I./optparse -Ofast -std=c++11 -fexpensive-optimizations -funroll-all-loops -ffast-math -finline-functions -fopenmp ${sse3FLAG} -frerun-loop-opt ${STATIC_FLAG} $(HDRS) $(DEFINES)
    else
-    CFLAGS= -I./ -I./optparse -Ofast -std=c++11 -fexpensive-optimizations -funroll-all-loops -ffast-math -finline-functions -fopenmp ${m64FLAG} -msse3 -frerun-loop-opt ${STATIC_FLAG} $(HDRS) $(DEFINES)
+    CFLAGS= -I./ -I./optparse -Ofast -std=c++11 -fexpensive-optimizations -funroll-all-loops -ffast-math -finline-functions -fopenmp ${m64FLAG} ${sse3FLAG} -frerun-loop-opt ${STATIC_FLAG} $(HDRS) $(DEFINES)
    endif 
   endif
  endif
 endif
-LIBS= -lboost_filesystem -lboost_system -lgomp -lm -lc -lgcc -lrt -lz
-MERGELIBS= -lm -lc -lgcc -lrt -lz
+LIBS= -lboost_filesystem -lboost_system -lgomp -lm -lc -lgcc -lz
+MERGELIBS= -lm -lc -lgcc  -lz
 MKDIR_P = mkdir -p
 #ifdef ALPINE
  ALPINE_FLAG= -fPIC -static
